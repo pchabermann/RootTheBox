@@ -34,7 +34,7 @@ import xml.etree.cElementTree as ET
 from uuid import uuid4
 from hashlib import md5, sha1, sha256, sha512
 from pbkdf2 import PBKDF2
-from sqlalchemy import Column, ForeignKey, desc
+from sqlalchemy import Column, ForeignKey, desc, func
 from sqlalchemy.orm import synonym, relationship, backref
 from sqlalchemy.types import Unicode, Integer, String, Boolean, DateTime
 from models import dbsession
@@ -128,10 +128,22 @@ class User(DatabaseObject):
         return dbsession.query(cls).filter_by(uuid=str(_uuid)).first()
 
     @classmethod
-    def by_handle(cls, handle):
+    def by_email(cls, _email):
+        """ Return an object based on a email """
+        return dbsession.query(cls).filter_by(_email=str(_email)).first()
+
+    @classmethod
+    def by_handle(cls, handle, case_sensitive=True):
         """ Return the user object whose user is "_handle" """
         handle = str(handle).strip()
-        return dbsession.query(cls).filter_by(_handle=handle).first()
+        if case_sensitive:
+            return dbsession.query(cls).filter_by(_handle=handle).first()
+        else:
+            return (
+                dbsession.query(cls)
+                .filter(func.lower(User._handle) == func.lower(handle))
+                .first()
+            )
 
     @classmethod
     def _hash_bank_password(cls, algorithm_name, password):
@@ -179,6 +191,12 @@ class User(DatabaseObject):
             return Theme.by_id(self.theme_id).name
         else:
             return options.default_theme
+
+    @theme.setter
+    def theme(self, value):
+        theme = Theme.by_name(value)
+        if theme:
+            self.theme_id = theme.id
 
     @property
     def bank_password(self):
@@ -325,7 +343,7 @@ class User(DatabaseObject):
         item = MarketItem.by_name(item_name)
         if item is None:
             raise ValueError("Item '%s' not in database." % str(item_name))
-        return True if item in self.team.items else False
+        return True if self.team and item in self.team.items else False
 
     def has_permission(self, permission):
         """ Return True if 'permission' is in permissions_names """
@@ -392,7 +410,7 @@ class User(DatabaseObject):
             "email": self.email,
             "admin": str(self.is_admin()).lower(),
             "hash_algorithm": self.algorithm,
-            "team_uuid": self.team.uuid,
+            "team_uuid": self.team.uuid if self.team else "",
             "avatar": self.avatar,
             "notes": self.notes,
         }

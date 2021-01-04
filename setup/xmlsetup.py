@@ -41,7 +41,7 @@ from base64 import b64decode
 
 def get_child_by_tag(elem, tag_name):
     """ Return child elements with a given tag """
-    tags = [child for child in elem.getchildren() if child.tag == tag_name]
+    tags = [child for child in elem if child.tag == tag_name]
     return tags[0] if 0 < len(tags) else None
 
 
@@ -59,8 +59,10 @@ def get_child_text(elem, tag_name, default=""):
 
 def create_categories(categories):
     """ Create Category objects based on XML data """
+    if categories is None:
+        return
     logging.info("Found %s categories" % categories.get("count"))
-    for index, cat_elem in enumerate(categories.getchildren()):
+    for index, cat_elem in enumerate(categories):
         cat = get_child_text(cat_elem, "category")
         if Category.by_category(cat) is None:
             try:
@@ -74,8 +76,10 @@ def create_categories(categories):
 
 def create_levels(levels):
     """ Create GameLevel objects based on XML data """
+    if levels is None:
+        return
     logging.info("Found %s game level(s)" % levels.get("count"))
-    for index, level_elem in enumerate(levels.getchildren()):
+    for index, level_elem in enumerate(levels):
         # GameLevel 0 is created automatically by the bootstrap
         try:
             number = get_child_text(level_elem, "number")
@@ -109,9 +113,9 @@ def create_levels(levels):
 
 def create_hints(parent, box, flag=None):
     """ Create flag objects for a box """
-    if parent:
+    if parent and box:
         logging.info("Found %s hint(s)" % parent.get("count"))
-        for index, hint_elem in enumerate(parent.getchildren()):
+        for index, hint_elem in enumerate(parent):
             try:
                 flag_id = None
                 if flag:
@@ -126,10 +130,10 @@ def create_hints(parent, box, flag=None):
 
 def create_flags(parent, box):
     """ Create flag objects for a box """
-    if parent:
+    if parent and box:
         logging.info("Found %s flag(s)" % parent.get("count"))
         flag_dependency = []
-        for index, flag_elem in enumerate(parent.getchildren()):
+        for index, flag_elem in enumerate(parent):
             try:
                 flag = Flag(box_id=box.id)
                 flag.name = get_child_text(flag_elem, "name")
@@ -164,8 +168,10 @@ def create_flags(parent, box):
 
 def add_attachments(parent, flag):
     """ Add uploaded files as attachments to flags """
+    if flag is None:
+        return
     logging.info("Found %s attachment(s)" % parent.get("count"))
-    for index, attachement_elem in enumerate(parent.getchildren()):
+    for index, attachement_elem in enumerate(parent):
         try:
             flag_attachment = FlagAttachment(
                 file_name=get_child_text(attachement_elem, "flag_name")
@@ -181,8 +187,10 @@ def add_attachments(parent, flag):
 
 def create_choices(parent, flag):
     """ Create multiple choice flag objects """
+    if flag is None:
+        return
     logging.info("Found %s choice(s)" % parent.get("count"))
-    for index, choice_elem in enumerate(parent.getchildren()):
+    for index, choice_elem in enumerate(parent):
         try:
             choice = FlagChoice(flag_id=flag.id)
             choice.choice = choice_elem.text
@@ -193,8 +201,10 @@ def create_choices(parent, flag):
 
 def create_boxes(parent, corporation):
     """ Create boxes for a corporation """
+    if corporation is None:
+        return
     logging.info("Found %s boxes" % parent.get("count"))
-    for index, box_elem in enumerate(parent.getchildren()):
+    for index, box_elem in enumerate(parent):
         try:
             name = get_child_text(box_elem, "name")
             game_level = GameLevel.by_number(get_child_text(box_elem, "gamelevel", "0"))
@@ -235,6 +245,8 @@ def create_boxes(parent, corporation):
 
 def create_corps(corps):
     """ Create Corporation objects based on XML data """
+    if corps is None:
+        return
     logging.info("Found %s corporation(s)" % corps.get("count"))
     for index, corp_elem in enumerate(corps):
         try:
@@ -254,9 +266,8 @@ def update_configuration(config):
     """ Update Configuration options based on XML data """
     if config is None:
         return
-    else:
-        """ Backup configuration """
-        copyfile(options.config, options.config + ".bak")
+    """ Backup configuration """
+    copyfile(options.config, options.config + ".bak")
     images = ["ctf_logo", "story_character", "scoreboard_right_image"]
     for config_elem in config:
         try:
@@ -316,7 +327,7 @@ def _xml_file_import(filename):
 
 def import_xml(target):
     """ Import XML file or directory of files """
-    target = path.abspath(target)
+    target = path.abspath(path.expanduser(target))
     if not path.exists(target):
         logging.error("Error: Target does not exist (%s) " % target)
     elif path.isdir(target):

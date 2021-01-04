@@ -4,6 +4,7 @@
 
 {% block header %}
 <link href="/static/css/pages/public/login.css" rel="stylesheet">
+{% from tornado.options import options %}
 {% end %}
 
 {% block content %}
@@ -38,6 +39,9 @@
             <i class="fa fa-sign-in"></i>
             {{ _("Login") }}
         </button>
+        {% if len(options.mail_host) > 0 %}
+        <a href="/reset" style="float: right;">{{ _('Forgot Password') }}</a>
+        {% end %}
     </form>
 </div> <!-- /container -->
 <br />

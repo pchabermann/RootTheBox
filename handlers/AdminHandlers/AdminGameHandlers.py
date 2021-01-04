@@ -38,6 +38,7 @@ from models.Swat import Swat
 from models.GameLevel import GameLevel
 from models.User import ADMIN_PERMISSION
 from models.Team import Team
+from models.Theme import Theme
 from models.Penalty import Penalty
 from models.Snapshot import Snapshot
 from models.SnapshotTeam import SnapshotTeam
@@ -53,10 +54,12 @@ from libs.ValidationError import ValidationError
 from libs.ConfigHelpers import save_config
 from libs.GameHistory import GameHistory
 from libs.ConsoleColors import *
+from libs.Scoreboard import score_bots
 from handlers.BaseHandlers import BaseHandler
 from string import printable
 from setup.xmlsetup import import_xml
 from tornado.options import options
+from tornado.ioloop import PeriodicCallback
 from past.builtins import basestring
 from datetime import datetime
 
@@ -70,42 +73,62 @@ class AdminGameHandler(BaseHandler):
     @authorized(ADMIN_PERMISSION)
     def post(self, *args, **kwargs):
         start_game = self.get_argument("start_game", None)
-        suspend_reg = self.get_argument("suspend_registration", "false")
-        freeze_score = self.get_argument("freeze_scoreboard", "false")
-        stop_timer = self.get_argument("stop_timer", "off")
+        suspend_reg = self.get_argument("suspend_registration", None)
+        freeze_score = self.get_argument("freeze_scoreboard", None)
+        stop_timer = self.get_argument("stop_timer", None)
 
-        if start_game:
+        if (
+            start_game
+            and start_game != str(self.application.settings["game_started"]).lower()
+        ):
             if self.get_argument("start_game", "") == "true":
                 self.start_game()
             else:
                 self.stop_game()
-        if stop_timer == "on":
-            self.application.settings["stop_timer"] = True
-        else:
-            self.application.settings["stop_timer"] = False
-        if suspend_reg == "true":
-            self.application.settings["suspend_registration"] = True
-        elif suspend_reg == "false":
-            self.application.settings["suspend_registration"] = False
-        if freeze_score == "false":
-            self.application.settings["freeze_scoreboard"] = False
-            if self.application.settings["temp_global_notifications"] is not None:
-                options.global_notification = self.application.settings[
+        if (
+            stop_timer
+            and self.isOn(stop_timer) != self.application.settings["stop_timer"]
+        ):
+            if self.isOn(stop_timer):
+                self.application.settings["stop_timer"] = True
+            else:
+                self.application.settings["stop_timer"] = False
+        if (
+            suspend_reg
+            and suspend_reg
+            != str(self.application.settings["suspend_registration"]).lower()
+        ):
+            if suspend_reg == "true":
+                self.application.settings["suspend_registration"] = True
+            elif suspend_reg == "false":
+                self.application.settings["suspend_registration"] = False
+        if (
+            freeze_score
+            and freeze_score
+            != str(self.application.settings["freeze_scoreboard"]).lower()
+        ):
+            if freeze_score == "false":
+                self.application.settings["freeze_scoreboard"] = False
+                self.application.settings["stop_timer"] = False
+                if self.application.settings["temp_global_notifications"] is not None:
+                    options.global_notification = self.application.settings[
+                        "temp_global_notifications"
+                    ]
+                    self.application.settings["temp_global_notifications"] = None
+                self.event_manager.push_scoreboard()
+            elif freeze_score:
+                diff = 60 * int(float(freeze_score))
+                self.application.settings["freeze_scoreboard"] = time.time() + diff
+                self.application.settings[
                     "temp_global_notifications"
-                ]
-                self.application.settings["temp_global_notifications"] = None
-            self.event_manager.push_scoreboard()
-
-        elif freeze_score:
-            diff = 60 * int(freeze_score)
-            self.application.settings["freeze_scoreboard"] = time.time() + diff
-            self.application.settings[
-                "temp_global_notifications"
-            ] = options.global_notification
-            options.global_notification = False
-            self.event_manager.push_scoreboard()
+                ] = options.global_notification
+                options.global_notification = False
+                self.event_manager.push_scoreboard()
 
         self.redirect("/user")
+
+    def isOn(self, value):
+        return value == "on"
 
 
 class AdminMessageHandler(BaseHandler):
@@ -576,6 +599,7 @@ class AdminImportXmlHandler(BaseHandler):
             else:
                 errors.append("Failed to parse file correctly.")
             os.unlink(fxml)
+            self.refresh_app_config()
             self.render("admin/import.html", success=success, errors=errors)
         else:
             self.render("admin/import.html", success=None, errors=["No file data."])
@@ -587,6 +611,29 @@ class AdminImportXmlHandler(BaseHandler):
         tmp_file.write(data)
         tmp_file.close()
         return tmp_file.name
+
+    def refresh_app_config(self):
+        # Update default theme
+        self.application.ui_modules["Theme"].theme = Theme.by_name(
+            options.default_theme
+        )
+
+        # Callback functions  - updates and starts/stops the botnet callback
+        self.application.settings["score_bots_callback"].stop()
+        self.application.score_bots_callback = PeriodicCallback(
+            score_bots, options.bot_reward_interval
+        )
+        if options.use_bots:
+            logging.info("Starting botnet callback function")
+            self.application.settings["score_bots_callback"].start()
+
+        logging.info("Restarting history callback function")
+        game_history = GameHistory.instance()
+        self.application.settings["history_callback"].stop()
+        self.application.history_callback = PeriodicCallback(
+            game_history.take_snapshot, options.history_snapshot_interval
+        )
+        self.application.settings["history_callback"].start()
 
 
 class AdminResetHandler(BaseHandler):

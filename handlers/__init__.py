@@ -87,6 +87,8 @@ urls = [
     # Public handlers - PublicHandlers.py
     (r"/login", LoginHandler),
     (r"/registration", RegistrationHandler),
+    (r"/reset", ForgotPasswordHandler),
+    (r"/reset/token", ResetPasswordHandler),
     (r"/about", AboutHandler),
     (r"/", HomePageHandler),
     (r"/robots(|\.txt)", FakeRobotsHandler),
@@ -124,7 +126,7 @@ urls = [
     (r"/user/bots/download/(windows|linux|monitor)", BotDownloadHandler),
     (r"/user/bots/webmonitor", BotWebMonitorHandler),
     ### BLACK MARKET URLS ###
-    # This is only relevent if the black market is enabled
+    # This is only relevant if the black market is enabled
     (r"/scoreboard/wall_of_sheep", ScoreboardWallOfSheepHandler),
     # Market handlers - MarketHandlers.py
     (r"/user/market", MarketViewHandler),
@@ -194,6 +196,7 @@ urls = [
     (r"/admin/reset", AdminResetHandler),
     # Error handlers - ErrorHandlers.py
     (r"/403", UnauthorizedHandler),
+    (r"/gamestatus", StopHandler),
     (r"/(.*).php", NoobHandler),
     (r"/admin", NoobHandler),
     (r"/(.*)phpmyadmin(.*)", NoobHandler),
