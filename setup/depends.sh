@@ -69,7 +69,7 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
   fi
 
   echo "[*] Installing common packages..."
-  apt-get install build-essential zlib1g-dev memcached $SKIP
+  apt-get install build-essential zlib1g-dev memcached rustc $SKIP
 
   echo "[*] Installing db packages..."
   if [[ "$SKIP" == "-y" ]]; then
@@ -102,10 +102,16 @@ echo "[*] Installing python libs..."
 
 #sh "$current_path/python-depends.sh"
 if [[ "$python_version" == "2" ]]; then
-    pip2 install -r "$current_path/requirements.txt" --upgrade
+    for line in $(cat "$current_path/requirements.txt")
+    do
+      pip install $line --upgrade
+    done
 fi
 if [[ "$python3_version" == "3" ]]; then
-    pip3 install -r "$current_path/requirements.txt" --upgrade
+    for line in $(cat "$current_path/requirements.txt")
+    do
+      pip3 install $line --upgrade
+    done
 fi
 
 echo ""

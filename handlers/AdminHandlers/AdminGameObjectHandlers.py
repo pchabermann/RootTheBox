@@ -57,6 +57,7 @@ from models.Flag import (
 )
 from libs.ValidationError import ValidationError
 from libs.SecurityDecorators import *
+from libs.StringCoding import decode
 from builtins import str
 
 
@@ -164,11 +165,13 @@ class AdminCreateHandler(BaseHandler):
         """ Add a new category to the database """
         try:
             category = self.get_argument("category", "")
+            cat_desc = self.get_argument("category_description", "")
             if Category.by_category(category) is not None:
                 raise ValidationError("Category already exists")
             else:
                 new_category = Category()
                 new_category.category = category
+                new_category.description = cat_desc
                 self.dbsession.add(new_category)
                 self.dbsession.commit()
                 self.redirect("/admin/view/categories")
@@ -434,7 +437,7 @@ class AdminViewHandler(BaseHandler):
                             self.config.dynamic_flag_value
                             and self.config.dynamic_flag_type == "decay_all"
                         ):
-                            for item in Flag.captures(flag.id):
+                            for item in Flag.team_captures(flag.id):
                                 tm = Team.by_id(item[0])
                                 deduction = flag.dynamic_value(tm) - flag_value
                                 tm.money = int(tm.money - deduction)
@@ -446,7 +449,7 @@ class AdminViewHandler(BaseHandler):
                         self.dbsession.commit()
                         self.event_manager.flag_captured(team, flag)
                         self._check_level(flag, team)
-                    success.append("%s awarded %d" % (team.name, flag_value))
+                        success.append("%s awarded %d" % (team.name, flag_value))
                 if (
                     accept_answer == "on"
                     and (flag.type == "static" or flag.type == "regex")
@@ -489,7 +492,7 @@ class AdminEditHandler(BaseHandler):
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def get(self, *args, **kwargs):
-        """ Just redirect to the corisponding /view page """
+        """ Just redirect to the corresponding /view page """
         uri = {
             "corporation": "game_objects",
             "box": "game_objects",
@@ -523,6 +526,7 @@ class AdminEditHandler(BaseHandler):
             "market_item": self.edit_market_item,
             "category": self.edit_category,
             "flag_order": self.edit_flag_order,
+            "level_access": self.edit_level_access,
         }
         if len(args) and args[0] in uri:
             uri[args[0]]()
@@ -560,13 +564,20 @@ class AdminEditHandler(BaseHandler):
             if cat is None:
                 raise ValidationError("Category does not exist")
             category = self.get_argument("category", "")
+            cat_desc = self.get_argument("category_description", "")
             if category != cat.category:
                 logging.info(
                     "Updated category name %s -> %s" % (cat.category, category)
                 )
-                cat.category = category
-                self.dbsession.add(cat)
-                self.dbsession.commit()
+            if cat_desc != cat.description:
+                logging.info(
+                    "Updated category description %s -> %s"
+                    % (cat.description, cat_desc)
+                )
+            cat.category = category
+            cat.description = cat_desc
+            self.dbsession.add(cat)
+            self.dbsession.commit()
             self.redirect("/admin/view/categories")
         except ValidationError as error:
             self.render("admin/view/categories.html", errors=[str(error)])
@@ -766,7 +777,7 @@ class AdminEditHandler(BaseHandler):
                         for flagoption in arguments[item]:
                             if len(flagoption) > 0:
                                 # add choice
-                                FlagChoice.create_choice(flag, flagoption)
+                                FlagChoice.create_choice(flag, decode(flagoption))
         for choice in currentchoices:
             if not choice["uuid"] in choiceitems:
                 # delete choice
@@ -776,7 +787,7 @@ class AdminEditHandler(BaseHandler):
             flagchoice = FlagChoice.by_uuid(choice)
             if choiceitems[choice] != flagchoice.choice:
                 # update choice
-                flagchoice.choice = choiceitems[choice]
+                flagchoice.choice = decode(choiceitems[choice])
                 self.dbsession.add(flagchoice)
         self.dbsession.commit()
 
@@ -803,6 +814,43 @@ class AdminEditHandler(BaseHandler):
                 "admin/view/game_objects.html", success=None, errors=[str(error)]
             )
 
+    def edit_level_access(self):
+        """ Update game level access """
+        try:
+            level = GameLevel.by_uuid(self.get_argument("uuid", ""))
+            if level is None:
+                raise ValidationError("Game level does not exist")
+            else:
+                teams = []
+                lv_teams = level.teams
+                for team in lv_teams:
+                    teams.append(team.uuid)
+                access = self.request.arguments.get("accessList", [])
+                available = self.request.arguments.get("availableList", [])
+                if not isinstance(access, list):
+                    access = [access]
+                if not isinstance(available, list):
+                    available = [available]
+                for team_uuid in access:
+                    if decode(team_uuid) not in teams:
+                        team = Team.by_uuid(team_uuid)
+                        if team:
+                            team.game_levels.append(level)
+                            self.dbsession.add(team)
+                            self.dbsession.commit()
+                for team_uuid in available:
+                    if decode(team_uuid) in teams:
+                        team = Team.by_uuid(team_uuid)
+                        if team:
+                            team.game_levels.remove(level)
+                            self.dbsession.add(team)
+                            self.dbsession.commit()
+                self.redirect("/admin/view/game_levels")
+        except ValueError:
+            raise ValidationError("That was not a number ...")
+        except ValidationError as error:
+            self.render("admin/view/game_levels.html", errors=[str(error)])
+
     def edit_game_level(self):
         """ Update game level objects """
         try:
@@ -820,7 +868,7 @@ class AdminEditHandler(BaseHandler):
                 level.buyout = min(level.buyout, 100)
             elif level._type == "none":
                 level.buyout = 0
-            if level._type != "none" and level.buyout == 0:
+            if level._type != "none" and level._type != "hidden" and level.buyout == 0:
                 level._type = "none"
             self.dbsession.add(level)
             self.dbsession.flush()
@@ -1083,7 +1131,7 @@ class AdminAjaxGameObjectDataHandler(BaseHandler):
                     }
                 ]
                 captures = []
-                for item in Flag.captures(flag.id):
+                for item in Flag.team_captures(flag.id):
                     team = Team.by_id(item[0])
                     if team:
                         captures.append({"name": team.name})
@@ -1105,6 +1153,20 @@ class AdminAjaxGameObjectDataHandler(BaseHandler):
                     "hints": hints,
                 }
                 self.write(obj)
+            else:
+                self.write({"Error": "Invalid uuid."})
+        elif obj_name == "access":
+            obj = game_objects["game_level"].by_uuid(uuid)
+            if obj is not None:
+                all_teams = Team.all()
+                access = []
+                available = []
+                for team in obj.teams:
+                    all_teams.remove(team)
+                    access.append(team.to_dict())
+                for team in all_teams:
+                    available.append(team.to_dict())
+                self.write({"available": available, "access": access})
             else:
                 self.write({"Error": "Invalid uuid."})
         else:

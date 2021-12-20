@@ -33,6 +33,7 @@ from builtins import str
 from past.utils import old_div
 from libs.SecurityDecorators import authenticated, game_started
 from libs.StringCoding import decode, encode
+from libs.WebhookHelpers import *
 from handlers.BaseHandlers import BaseHandler
 from models.GameLevel import GameLevel
 from models.Flag import Flag
@@ -109,7 +110,14 @@ class BoxHandler(BaseHandler):
         box = Box.by_uuid(uuid)
         if box is not None:
             user = self.get_current_user()
-            if box.locked:
+            level = GameLevel.by_id(box.game_level_id)
+            if (
+                user.team
+                and level.type != "none"
+                and level not in user.team.game_levels
+            ):
+                self.redirect("/403")
+            elif box.locked:
                 self.render(
                     "missions/status.html",
                     errors=None,
@@ -279,6 +287,9 @@ class BoxHandler(BaseHandler):
             )
         success = [reward_dialog]
 
+        # Fire capture webhook
+        send_capture_webhook(user, flag, old_reward)
+
         # Check for Box Completion
         box = flag.box
         if box.is_complete(user):
@@ -292,6 +303,9 @@ class BoxHandler(BaseHandler):
                 success.append(
                     "Congratulations! You have completed " + box.name + ". " + dialog
                 )
+
+                # Fire box complete webhook
+                send_box_complete_webhook(user, box)
             else:
                 success.append("Congratulations! You have completed " + box.name + ".")
 
@@ -328,6 +342,25 @@ class BoxHandler(BaseHandler):
                 + ". "
                 + reward_dialog
             )
+
+            # Fire level complete webhook
+            send_level_complete_webhook(user, level)
+
+        # Unlock level if based on Game Score
+        for lv in GameLevel.all():
+            if (
+                lv.type == "points"
+                and lv.buyout <= user.team.money
+                and lv not in user.team.game_levels
+            ):
+                logging.info(
+                    "%s (%s) unlocked %s" % (user.handle, user.team.name, lv.name)
+                )
+                user.team.game_levels.append(lv)
+                self.dbsession.add(user.team)
+                self.dbsession.commit()
+                self.event_manager.level_unlocked(user, lv)
+                success.append("Congratulations! You have unlocked " + lv.name)
 
         # Unlock next level if based on Game Progress
         next_level = GameLevel.by_id(level.next_level_id)
@@ -374,6 +407,10 @@ class BoxHandler(BaseHandler):
             self.dbsession.flush()
             self.event_manager.flag_penalty(user, flag)
             self.dbsession.commit()
+
+            # Fire capture failed webhook
+            send_capture_failed_webhook(user, flag)
+
             return penalty
         return False
 
@@ -391,7 +428,7 @@ class BoxHandler(BaseHandler):
                     self.config.dynamic_flag_value
                     and self.config.dynamic_flag_type == "decay_all"
                 ):
-                    for item in Flag.captures(flag.id):
+                    for item in Flag.team_captures(flag.id):
                         tm = Team.by_id(item[0])
                         deduction = flag.dynamic_value(tm) - flag_value
                         tm.money = int(tm.money - deduction)
@@ -400,10 +437,11 @@ class BoxHandler(BaseHandler):
                 team.money += flag_value
                 user.money += flag_value
                 team.flags.append(flag)
+                user.flags.append(flag)
                 self.dbsession.add(user)
                 self.dbsession.add(team)
                 self.dbsession.commit()
-                self.event_manager.flag_captured(team, flag)
+                self.event_manager.flag_captured(user, flag)
                 return True
         return False
 
@@ -434,7 +472,10 @@ class FlagCaptureMessageHandler(BaseHandler):
     def get(self, *args, **kwargs):
         fuuid = self.get_argument("flag", None)
         buuid = self.get_argument("box", None)
-        reward = self.get_argument("reward", None)
+        try:
+            reward = int(self.get_argument("reward", 0))
+        except ValueError:
+            reward = 0
         user = self.get_current_user()
         box = Box.by_uuid(buuid)
         flag = Flag.by_uuid(fuuid)

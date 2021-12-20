@@ -32,6 +32,7 @@ import random
 import io
 import xml.etree.cElementTree as ET
 from uuid import uuid4
+from datetime import datetime
 from hashlib import md5, sha1, sha256, sha512
 from pbkdf2 import PBKDF2
 from sqlalchemy import Column, ForeignKey, desc, func
@@ -43,6 +44,7 @@ from models.MarketItem import MarketItem
 from models.BaseModels import DatabaseObject
 from models.EmailToken import EmailToken
 from models.Theme import Theme
+from models.Relationships import user_to_flag
 from libs.XSSImageCheck import MAX_AVATAR_SIZE, MIN_AVATAR_SIZE, IMG_FORMATS
 from libs.XSSImageCheck import is_xss_image, get_new_avatar, default_avatar
 from libs.ValidationError import ValidationError
@@ -78,6 +80,7 @@ class User(DatabaseObject):
     _password = Column("password", String(64))
     _bank_password = Column("bank_password", String(128))
     _notes = Column(Unicode(512))
+    _expire = Column(DateTime, default=None, nullable=True)
     money = Column(Integer, default=0, nullable=False)
 
     theme_id = Column(Integer, ForeignKey("theme.id"), default=3, nullable=False)
@@ -101,6 +104,10 @@ class User(DatabaseObject):
         "sha256": (sha256, 3, "sha256"),
         "sha512": (sha512, 4, "sha512"),
     }
+
+    flags = relationship(
+        "Flag", secondary=user_to_flag, backref=backref("user", lazy="select")
+    )
 
     @classmethod
     def all(cls):
@@ -129,9 +136,16 @@ class User(DatabaseObject):
         return dbsession.query(cls).filter_by(uuid=str(_uuid)).first()
 
     @classmethod
-    def by_email(cls, _email):
+    def by_email(cls, email):
         """ Return an object based on a email """
-        return dbsession.query(cls).filter_by(_email=str(_email)).first()
+        if email and len(email) > 0:
+            return (
+                dbsession.query(cls)
+                .filter(func.lower(User._email) == func.lower(email))
+                .first()
+            )
+        else:
+            return None
 
     @classmethod
     def by_handle(cls, handle, case_sensitive=True):
@@ -205,7 +219,7 @@ class User(DatabaseObject):
 
     @bank_password.setter
     def bank_password(self, value):
-        if not options.banking:
+        if not options.banking or not value:
             # random password
             _password = "".join(
                 random.SystemRandom().choice(string.ascii_uppercase + string.digits)
@@ -231,6 +245,19 @@ class User(DatabaseObject):
         if not 3 <= len(new_handle) <= 16:
             raise ValidationError("Handle must be 3 - 16 characters")
         self._handle = new_handle
+
+    @property
+    def expire(self):
+        if self._expire is None or self._expire == "":
+            return ""
+        return self._expire.strftime("%m/%d/%Y")
+
+    @expire.setter
+    def expire(self, expire):
+        if expire and len(expire) > 0 and not self.is_admin():
+            self._expire = datetime.strptime(expire, "%m/%d/%Y")
+        else:
+            self._expire = None
 
     @property
     def name(self):
@@ -359,6 +386,12 @@ class User(DatabaseObject):
             return True
         return emailtoken.valid
 
+    def is_expired(self):
+        expired = self._expire
+        if expired and expired != "":
+            return datetime.now() > expired
+        return False
+
     def validate_email(self, token):
         emailtoken = EmailToken.by_user_id(self.id)
         if emailtoken and emailtoken.value == token:
@@ -428,6 +461,7 @@ class User(DatabaseObject):
             "team_uuid": self.team.uuid if self.team else "",
             "avatar": self.avatar,
             "notes": self.notes,
+            "expire": self.expire,
         }
 
     def to_xml(self, parent):
@@ -442,6 +476,7 @@ class User(DatabaseObject):
             ET.SubElement(user_elem, "email").text = self.email
             ET.SubElement(user_elem, "password").text = self._password
             ET.SubElement(user_elem, "notes").text = self.notes
+            ET.SubElement(user_elem, "expire").text = self.expire
             bpass_elem = ET.SubElement(user_elem, "bankpassword")
             bpass_elem.text = self._bank_password
             bpass_elem.set("algorithm", self.algorithm)

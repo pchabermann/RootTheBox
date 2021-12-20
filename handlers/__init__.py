@@ -86,10 +86,7 @@ def get_cookie_secret():
 urls = [
     # Public handlers - PublicHandlers.py
     (r"/login", LoginHandler),
-    (r"/registration", RegistrationHandler),
-    (r"/registration/token", ValidEmailHandler),
-    (r"/reset", ForgotPasswordHandler),
-    (r"/reset/token", ResetPasswordHandler),
+    (r"/oidc", CodeFlowHandler),
     (r"/about", AboutHandler),
     (r"/", HomePageHandler),
     (r"/robots(|\.txt)", FakeRobotsHandler),
@@ -184,7 +181,6 @@ urls = [
     (r"/admin/upgrades/source_code_market(.*)", AdminSourceCodeMarketHandler),
     (r"/admin/upgrades/swat(.*)", AdminSwatHandler),
     (r"/admin/users", AdminManageUsersHandler),
-    (r"/admin/user_stats", AdminUserStatsHandler),
     (r"/admin/users/edit/(user|team)", AdminEditUsersHandler),
     (r"/admin/users/edit/teams/scores", AdminEditTeamsHandler),
     (r"/admin/users/delete/(.*)", AdminDeleteUsersHandler),
@@ -203,6 +199,17 @@ urls = [
     (r"/(.*)phpmyadmin(.*)", NoobHandler),
     (r"/administrator(.*)", NoobHandler),
 ]
+
+# These routes should be disabled if we're not using the database for authentication.
+# If database auth is used add them in.
+if options.auth == "db":
+    urls.insert(2, (r"/reset/token", ResetPasswordHandler))
+    urls.insert(2, (r"/reset", ForgotPasswordHandler))
+    urls.insert(2, (r"/registration/token", ValidEmailHandler))
+    urls.insert(2, (r"/registration", RegistrationHandler))
+# For Azure AD authentication we have a simplified Join Team instead of registration.
+elif options.auth == "azuread":
+    urls.insert(2, (r"/jointeam", JoinTeamHandler))
 
 # This one has to be last
 urls.append((r"/(.*)", NotFoundHandler))
@@ -236,7 +243,8 @@ app = Application(
     # Flags used to run the game
     game_started=options.autostart_game,
     suspend_registration=False,
-    freeze_scoreboard=False,
+    countdown_timer=False,
+    hide_scoreboard=False,
     stop_timer=False,
     temp_global_notifications=None,
     # Callback functions
@@ -249,6 +257,7 @@ app = Application(
     scoreboard_state={},
     # Application version
     version=__version__,
+    autoreload=options.autoreload_source,
 )
 
 
@@ -262,6 +271,7 @@ def update_db(update=True):
         username=options.sql_user,
         password=options.sql_password,
         dialect=options.sql_dialect,
+        ssl_ca=options.sql_sslca,
     )
     alembic_cfg = Config("alembic/alembic.ini")
     alembic_cfg.attributes["configure_logger"] = False
@@ -279,14 +289,9 @@ def load_history():
 # Main entry point
 def start_server():
     """ Main entry point for the application """
-    if options.debug:
-        logging.warn(
-            "%sDebug mode is enabled; DO NOT USE THIS IN PRODUCTION%s" % (bold + R, W)
-        )
     locale.set_default_locale("en_US")
     locale.load_translations("locale")
     if options.autostart_game:
-        logging.info("The game is about to begin, good hunting!")
         app.settings["game_started"] = True
         app.settings["history_callback"].start()
         if options.use_bots:
@@ -319,6 +324,12 @@ def start_server():
             logging.error(err)
         sys.exit()
     server.add_sockets(sockets)
+    if options.debug:
+        logging.warning(
+            "%sDebug mode is enabled; DO NOT USE THIS IN PRODUCTION%s" % (bold + R, W)
+        )
+    if options.autostart_game:
+        logging.info("The game is about to begin, good hunting!")
     try:
         Scoreboard.update_gamestate(app)
     except OperationalError as err:

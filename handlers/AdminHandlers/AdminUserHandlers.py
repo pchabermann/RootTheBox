@@ -50,16 +50,6 @@ class AdminManageUsersHandler(BaseHandler):
         self.render("admin/view/users.html", errors=None)
 
 
-class AdminUserStatsHandler(BaseHandler):
-    @restrict_ip_address
-    @authenticated
-    @authorized(ADMIN_PERMISSION)
-    def get(self, *args, **kwargs):
-        uuid = self.get_argument("uuid", None)
-        user = User.by_uuid(uuid)
-        self.render("admin/view/user_stats.html", user=user, errors=None)
-
-
 class AdminEditTeamsHandler(BaseHandler):
     @restrict_ip_address
     @authenticated
@@ -136,6 +126,7 @@ class AdminEditUsersHandler(BaseHandler):
             name = self.get_argument("name", "")
             email = self.get_argument("email", "")
             notes = self.get_argument("notes", "")
+            expire = self.get_argument("expire", "")
             if user.name != name:
                 logging.info("Updated user Name %s -> %s" % (user.name, name))
                 user.name = name
@@ -145,6 +136,9 @@ class AdminEditUsersHandler(BaseHandler):
             if user.notes != notes:
                 logging.info("Updated user Notes %s -> %s" % (user.notes, notes))
                 user.notes = notes
+            if user.expire != expire:
+                logging.info("Updated user Expire %s -> %s" % (user.expire, expire))
+                user.expire = expire
             if options.banking:
                 hash_algorithm = self.get_argument("hash_algorithm", "")
                 if hash_algorithm != user.algorithm:
@@ -348,7 +342,9 @@ class AdminLockHandler(BaseHandler):
             user.locked = False if user.locked else True
             self.dbsession.add(user)
             self.dbsession.commit()
-        self.redirect("/admin/users")
+            self.redirect("/admin/users")
+        else:
+            self.render("public/404.html")
 
     def lock_box(self):
         uuid = self.get_argument("uuid", "")
@@ -357,7 +353,9 @@ class AdminLockHandler(BaseHandler):
             box.locked = False if box.locked else True
             self.dbsession.add(box)
             self.dbsession.commit()
-        self.redirect("/admin/view/game_objects#%s" % str(uuid))
+            self.redirect("/admin/view/game_objects#%s" % box.uuid)
+        else:
+            self.render("public/404.html")
 
 
 class AdminAjaxUserHandler(BaseHandler):

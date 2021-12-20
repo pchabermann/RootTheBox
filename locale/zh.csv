@@ -214,6 +214,7 @@ Dynamic Scoring,动态评分
 Each flag has a submit.  The player will choose the flag they intend to capture.,每次提交都有不同Flag。玩家将选择他们应该获得的Flag。
 "Each player will target challenges of varying difficulty and sophistication, attempting to collect flags and win glory.  Good luck!",每个玩家都将面对不同难度和复杂程度的挑战，尝试收集Flag并赢得荣耀。祝好运！
 Edit,编辑
+Edit Access,编辑权限
 Edit Account,编辑账户
 Edit Box,编辑题目
 Edit Category,编辑类别
@@ -252,6 +253,7 @@ Enter a Matching Flag,输入匹配Flag
 Enter Choice,输入选择
 Enter the same password as before,输入与以前相同的密码
 ERROR,错误
+Expire,到期
 Export Game Objects,导出游戏对象
 Export of gameplay settings does not include the entire server and database configuration.,导出游戏设置不包括整个服务器和数据库配置。
 Export XML,导出XML
@@ -305,6 +307,7 @@ Get your registration token from reception,从邀请函获得邀请码
 Glitch in the Matrix,发生小故障
 Global Notifications,全局通知
 Handle,用户名
+Hide scoreboard during countdown,在倒计时期间隐藏记分牌
 Hint,提示
 Hint not yet taken,提示尚未获取
 Hint Taken,提示已获取
@@ -362,6 +365,7 @@ MacOS,苹果系统
 Mainframe Console,主控制台
 Manage Black Market,管理黑市
 Manage Categories,管理类别
+Managed,管理
 Market Objects,市场对象
 Max,最大
 Max Flag Attempts,最大Flag尝试数
@@ -452,10 +456,11 @@ Paste Text Here,粘贴文本
 PasteBin,剪贴板
 Pastebin Character Limit,剪贴板字符限制
 Pause Registration,暂停注册
-Pause Scoreboard,暂停记分牌
+Set Countdown,设置倒计时
 Penalize the score by this percent of the flag value for each incorrect attempt (applied after dynamic scoring if enabled).,对每次不正确的尝试按Flag分值的百分比惩罚分数（如果启用动态评分后应用）。
 Pending,待定
 Pending Bribes,待定赞助
+per page,每页
 Plain Text,纯文本
 Play Story,开始剧情模式
 player,玩家
@@ -490,6 +495,7 @@ Registration,注册
 Registration Email,注册邮箱
 Registration Tokens,邀请码
 Regular Expression,正则表达式
+Remove,去掉
 Require Email,要求电子邮件
 Reset Actions,重置操作
 Reset Game,重置游戏
@@ -588,7 +594,8 @@ The starting money for a new,一个新的初始钱数
 Theme,主题
 There are currently no shared files.,目前没有共享文件。
 "These flags are files, users must submit the exact same file to capture the flag. Only a hash (SHA1) of the file is stored on the server.",这些Flag是文件，用户必须提交完全相同的文件才能捕获Flag。只有文件的哈希（SHA1）存储在服务器上。
-"This game is set up to use dynamic scoring, meaning as other players capture the flags, the value of those flags will decrease.  So grab them fast or lose out!",此游戏设置为使用动态评分，这意味着当其他玩家捕获Flag时，这些Flag的值将减少。所以尽快获得要么什么也得不到！
+"This game is set up to use dynamic scoring based on speed, meaning as other players capture the flags, the future value of those flags will decrease.  So grab them fast or lose out!","该游戏设置为使用基于速度的动态计分，这意味着随着其他玩家夺取旗帜，这些旗帜的未来价值将减少。 所以快点抓住它们，否则就输了！"
+"This game is set up to use dynamic scoring based on difficulty, meaning as other players capture the flags, the overall value of those flags will decrease and potentially reduce your score.","该游戏设置为使用基于难度的动态计分，这意味着当其他玩家夺取旗帜时，这些旗帜的整体价值将降低并可能降低您的分数。"
 This is a test flag/string the user could input for credit.,这是用户可以使用的测试Flag/字符串。
 This is the amount a player must pay to S.W.A.T. another players account.  Subsequent SWATs of the same player are also increased by this amount each time.,这是玩家必须向S.W.A.T支付的金额以干掉另一个玩家账号。同一玩家的后续SWAT每次也增加这个数量。
 This is the amount a player must pay to upgrade their bank passwords hashing algorithm,这是玩家必须支付的用于升级其银行密码哈希算法的金额
@@ -630,6 +637,7 @@ Unlock Level,解锁等级
 Unlocks,解锁
 Unlocks after,解锁后
 Unlocks for,解锁
+Unlocks at,解锁于
 Update Bank Password,更新银行密码
 Update Configuration,更新配置
 Update Password,更新密码

@@ -36,6 +36,7 @@ from models.User import User
 from libs.SecurityDecorators import *
 from libs.Sessions import MemcachedSession, MemcachedConnect
 from libs.EventManager import EventManager
+from libs.WebhookHelpers import *
 from builtins import str
 
 try:
@@ -218,19 +219,19 @@ class BaseHandler(RequestHandler):
 
     def put(self, *args, **kwargs):
         """ Log odd behavior, this should never get legitimately called """
-        logging.warn("%s attempted to use PUT method" % self.request.remote_ip)
+        logging.warning("%s attempted to use PUT method" % self.request.remote_ip)
 
     def delete(self, *args, **kwargs):
         """ Log odd behavior, this should never get legitimately called """
-        logging.warn("%s attempted to use DELETE method" % self.request.remote_ip)
+        logging.warning("%s attempted to use DELETE method" % self.request.remote_ip)
 
     def head(self, *args, **kwargs):
         """ Ignore it """
-        logging.warn("%s attempted to use HEAD method" % self.request.remote_ip)
+        logging.warning("%s attempted to use HEAD method" % self.request.remote_ip)
 
     def options(self, *args, **kwargs):
         """ Log odd behavior, this should never get legitimately called """
-        logging.warn("%s attempted to use OPTIONS method" % self.request.remote_ip)
+        logging.warning("%s attempted to use OPTIONS method" % self.request.remote_ip)
 
     def on_finish(self, *args, **kwargs):
         """ Called after a response is sent to the client """
@@ -238,10 +239,11 @@ class BaseHandler(RequestHandler):
 
     def timer(self):
         timer = None
-        if self.application.settings["freeze_scoreboard"]:
-            timerdiff = self.application.settings["freeze_scoreboard"] - time.time()
+        if self.application.settings["countdown_timer"]:
+            timerdiff = self.application.settings["countdown_timer"] - time.time()
             if timerdiff <= 0:
                 timerdiff = 0
+                self.application.settings["hide_scoreboard"] = False
                 if self.application.settings["stop_timer"]:
                     self.application.settings["stop_timer"] = False
                     self.stop_game()
@@ -256,6 +258,8 @@ class BaseHandler(RequestHandler):
             self.application.settings["history_callback"].start()
             if self.config.use_bots:
                 self.application.settings["score_bots_callback"].start()
+            # Fire game start webhook
+            send_game_start_webhook()
 
     def stop_game(self):
         """ Stop the game and all callbacks """
@@ -266,6 +270,8 @@ class BaseHandler(RequestHandler):
                 self.application.settings["history_callback"].stop()
             if self.application.settings["score_bots_callback"]._running:
                 self.application.settings["score_bots_callback"].stop()
+            # Fire game stop webhook
+            send_game_stop_webhook()
 
     def get_user_locale(self):
         """

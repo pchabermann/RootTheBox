@@ -88,7 +88,7 @@ class Team(DatabaseObject):
     )
 
     boxes = relationship(
-        "Box", secondary=team_to_box, backref=backref("team", lazy="select")
+        "Box", secondary=team_to_box, back_populates="teams", lazy="select"
     )
 
     items = relationship(
@@ -106,9 +106,7 @@ class Team(DatabaseObject):
     )
 
     game_levels = relationship(
-        "GameLevel",
-        secondary=team_to_game_level,
-        backref=backref("team", lazy="select"),
+        "GameLevel", secondary=team_to_game_level, back_populates="teams", lazy="select"
     )
 
     @classmethod
@@ -138,8 +136,12 @@ class Team(DatabaseObject):
 
     @classmethod
     def ranks(cls):
-        """ Returns a list of all objects in the database """
-        return sorted(dbsession.query(cls).all())
+        """ Returns a list of unlocked objects in the database """
+        ranked = []
+        for team in sorted(dbsession.query(cls).all()):
+            if not team.locked:
+                ranked.append(team)
+        return ranked
 
     @classmethod
     def count(cls):
@@ -197,9 +199,10 @@ class Team(DatabaseObject):
     @property
     def locked(self):
         # Hides team from scoreboard if all users are locked or no users
-        for user in self.members:
-            if not user.locked:
-                return False
+        if len(self.members) > 0:
+            for user in self.members:
+                if not user.locked:
+                    return False
         return True
 
     @property

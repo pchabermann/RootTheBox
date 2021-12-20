@@ -101,6 +101,14 @@ def setup():
 
     create_tables(engine, metadata, options.log_sql)
     sys.stdout.flush()
+
+    from models.Theme import Theme
+
+    themes = Theme.all()
+    if len(themes) > 0:
+        print(INFO + "It looks like database has already been set up.")
+        return
+
     print(INFO + "%s : Bootstrapping the database ..." % current_time())
     import setup.bootstrap
 
@@ -143,6 +151,52 @@ def setup_xml(xml_params):
         )
         import_xml(xml_param)
     print(INFO + "%s : Completed processing of all .xml file(s)" % (current_time()))
+
+
+def generate_teams(num_teams):
+    """ Generates teams by number """
+    from models import Team, dbsession
+
+    for i in range(0, num_teams):
+        team = Team()
+        team.name = "Team " + str(i + 1)
+        dbsession.add(team)
+        dbsession.flush()
+    dbsession.commit()
+
+
+def generate_teams_by_name(team_names):
+    """ Generates teams by their names """
+    from models import Team, dbsession
+
+    for i in range(0, len(team_names)):
+        team = Team()
+        team.name = team_names[i]
+        dbsession.add(team)
+        dbsession.flush()
+    dbsession.commit()
+
+
+def generate_admins(admin_names):
+    """ Creates admin users with the syntax '<handle> <email> <password>' """
+    from models import User, Permission, dbsession
+    from models.User import ADMIN_PERMISSION
+
+    for i in range(0, len(admin_names)):
+        admin_detail = admin_names[i].split()
+        user = User(
+            handle=admin_detail[0],
+            name=admin_detail[0],
+            email=admin_detail[1],
+            password=admin_detail[2],
+        )
+        dbsession.add(user)
+        dbsession.flush()
+
+        admin_permission = Permission(name=ADMIN_PERMISSION, user_id=user.id)
+        dbsession.add(admin_permission)
+        dbsession.flush()
+    dbsession.commit()
 
 
 def tests():
@@ -271,9 +325,9 @@ define(
 
 define(
     "session_age",
-    default=int(60 * 60),
+    default=int(48 * 60),
     group="server",
-    help="max session age (seconds)",
+    help="max session age (minutes) of inactivity",
     type=int,
 )
 
@@ -304,6 +358,20 @@ define(
     default=["127.0.0.1", "::1"],
     group="server",
     help="whitelist of ip addresses that can access the admin ui (use empty list to allow all ip addresses)",
+)
+
+define(
+    "autoreload_source",
+    default=True,
+    group="server",
+    help="automatically restart the server if a change is detected in source (debuggers will not follow)",
+)
+
+define(
+    "webhook_url",
+    default=None,
+    group="server",
+    help="url to receive webhook callbacks when certain game actions occur, such as flag capture",
 )
 
 # Mail Server
@@ -339,6 +407,13 @@ define(
     group="application",
     help="start the game automatically",
     type=bool,
+)
+
+define(
+    "auth",
+    default="db",
+    group="application",
+    help="The authentication mechanism, db (default) or Azure AD",
 )
 
 define(
@@ -416,6 +491,12 @@ define(
     help="links to add to the tool menu",
 )
 
+# Azure AD
+define("client_id", default="", group="azuread")
+define("tenant_id", default="common", group="azuread")
+define("client_secret", default="", group="azuread")
+define("redirect_url", default="http://localhost:8888/oidc", group="azuread")
+
 # ReCAPTCHA
 define(
     "use_recaptcha",
@@ -458,6 +539,10 @@ define(
 define("sql_port", default=3306, group="database", help="database tcp port", type=int)
 
 define("sql_user", default="rtb", group="database", help="database username")
+
+define(
+    "sql_sslca", default="", group="database", help="SSL CA Cert for database server."
+)
 
 define(
     "sql_password",
@@ -692,7 +777,7 @@ define(
 
 define(
     "min_user_password_length",
-    default=10,
+    default=7,
     group="game",
     help="min user password length",
     type=int,
@@ -920,6 +1005,31 @@ define(
     type=game_type,
 )
 
+# Auto-setup modes
+define(
+    "generate_teams",
+    default=0,
+    group="autosetup",
+    help="number of teams to generate (team 1, team 2, etc)",
+    type=int,
+)
+
+define(
+    "generate_team",
+    default=[],
+    group="autosetup",
+    help="generate teams by name ('My team','Another team')",
+    multiple=True,
+)
+
+define(
+    "add_admin",
+    default=[],
+    group="autosetup",
+    help="add administrator users, multiples supported ('<handle> <email> <password>')",
+    multiple=True,
+)
+
 # Process modes/flags
 define("setup", default="", help="setup a database (prod|devel|docker)")
 
@@ -955,11 +1065,15 @@ if __name__ == "__main__":
     if options.version:
         version()
     elif options.setup.startswith("docker"):
-        if not os.path.isfile(options.sql_database + ".db"):
+        if not os.path.isfile(options.sql_database) and not os.path.isfile(
+            "%s.db" % options.sql_database
+        ):
             logging.info("Running Docker Setup")
+            options.sql_database = "files/rootthebox.db"
             options.admin_ips = []  # Remove admin ips due to docker 127.0.0.1 mapping
             options.memcached = "memcached"
             options.x_headers = True
+            options_parse_environment()  # Pick up env vars before saving config file.
             save_config()
             setup()
         else:
@@ -972,7 +1086,8 @@ if __name__ == "__main__":
             + bold
             + "If necessary, update the db username and password in the cfg and set any advanced configuration options."
         )
-        os._exit(1)
+        if not options.setup:
+            os._exit(1)
     else:
         logging.debug("Parsing config file `%s`" % (os.path.abspath(options.config),))
         options.parse_config_file(options.config)
@@ -982,6 +1097,23 @@ if __name__ == "__main__":
 
     # Make sure that cli args always have president over the file and env
     options.parse_command_line()
+
+    # If authenticating with Azure AD (i.e. enterprise scenario) There's a few settings which
+    # don't make sense, so force them to disabled.
+    if options.auth.lower() == "azuread":
+        options.auth = "azuread"  # in-case it wasn't lower-case.
+        options.require_email = False
+        options.public_teams = False
+
+    if options.generate_teams:
+        generate_teams(options.generate_teams)
+    if options.generate_team:
+        generate_teams_by_name(options.generate_team)
+    if options.add_admin:
+        generate_admins(options.add_admin)
+
+    if options.admin_ips == ["[]"]:
+        options.admin_ips = []  # Tornado issue?
 
     if options.setup.lower()[:3] in ["pro", "dev"]:
         setup()
