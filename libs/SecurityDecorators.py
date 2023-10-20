@@ -26,8 +26,29 @@ from models.User import User
 from tornado.options import options
 
 
+def apikey(method):
+    """Checks to see if a key is valid"""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        apikey = None
+        for key, value in self.request.headers.items():
+            if key.lower() == "apikey":
+                apikey = value
+        if apikey and apikey in options.api_keys:
+            return method(self, *args, **kwargs)
+        else:
+            logging.warning(
+                "Attempted unauthorized access from %s to %s"
+                % (self.request.remote_ip, self.request.uri)
+            )
+            self.redirect(self.application.settings["forbidden_url"])
+
+    return wrapper
+
+
 def authenticated(method):
-    """ Checks to see if a user has been authenticated """
+    """Checks to see if a user has been authenticated"""
 
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
@@ -66,7 +87,7 @@ def authenticated(method):
 
 
 def game_started(method):
-    """ Checks to see if the game is running """
+    """Checks to see if the game is running"""
 
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
@@ -80,7 +101,7 @@ def game_started(method):
 
 
 def restrict_ip_address(method):
-    """ Only allows access to ip addresses in a provided list """
+    """Only allows access to ip addresses in a provided list"""
 
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
@@ -105,13 +126,21 @@ def blacklist_ips(method):
         if self.request.remote_ip not in self.application.settings["blacklisted_ips"]:
             return method(self, *args, **kwargs)
         else:
-            self.render("public/login.html", errors=None)
+            self.render(
+                "public/login.html",
+                info=None,
+                errors=["Your IP address is currently banned - Contact Admin"],
+            )
+            logging.warning(
+                "[BAN HAMMER] Login attempt from blacklisted IP %s"
+                % self.request.remote_ip
+            )
 
     return wrapper
 
 
 def authorized(permission):
-    """ Checks user's permissions """
+    """Checks user's permissions"""
 
     def func(method):
         @functools.wraps(method)
@@ -132,7 +161,7 @@ def authorized(permission):
 
 
 def debug(method):
-    """ Logs a method call/return """
+    """Logs a method call/return"""
 
     @functools.wraps(method)
     def wrapper(*args, **kwargs):
@@ -146,7 +175,7 @@ def debug(method):
 
 
 def has_item(name):
-    """ Checks user's team owns an unlock/item """
+    """Checks user's team owns an unlock/item"""
 
     def func(method):
         @functools.wraps(method)
@@ -166,8 +195,28 @@ def has_item(name):
     return func
 
 
+def item_allowed(name):
+    """Checks an unlock/item is allowed to use"""
+
+    def func(method):
+        @functools.wraps(method)
+        def wrapper(self, *args, **kwargs):
+            if name in options.allowed_market_items:
+                return method(self, *args, **kwargs)
+            else:
+                logging.warning(
+                    "Attempted unauthorized access from %s to %s"
+                    % (self.request.remote_ip, self.request.uri)
+                )
+                self.redirect(self.application.settings["forbidden_url"])
+
+        return wrapper
+
+    return func
+
+
 def use_bots(method):
-    """ Checks to see if a user has been authenticated """
+    """Checks to see if a user has been authenticated"""
 
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
@@ -180,7 +229,7 @@ def use_bots(method):
 
 
 def use_black_market(method):
-    """ Checks to see if a user has been authenticated """
+    """Checks to see if a user has been authenticated"""
 
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):

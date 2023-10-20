@@ -29,6 +29,9 @@ import logging
 
 from models.Team import Team
 from models.Box import Box
+from models.Flag import Flag
+from models.EmailToken import EmailToken
+from models.Corporation import Corporation
 from models.User import User, ADMIN_PERMISSION
 from models.Permission import Permission
 from models.GameLevel import GameLevel
@@ -37,6 +40,7 @@ from libs.SecurityDecorators import *
 from libs.ValidationError import ValidationError
 from libs.EventManager import EventManager
 from libs.Identicon import identicon
+from libs.ConfigHelpers import save_config
 from builtins import str
 from tornado.options import options
 from netaddr import IPAddress
@@ -62,11 +66,11 @@ class AdminEditTeamsHandler(BaseHandler):
             if group == "all":
                 teams = Team.all()
                 for team in teams:
-                    team.money += value
+                    team.set_score("admin", value + team.money)
                     self.dbsession.add(team)
             else:
                 team = Team.by_uuid(group)
-                team.money += value
+                team.set_score("admin", value + team.money)
                 self.dbsession.add(team)
             self.dbsession.commit()
             self.event_manager.admin_score_update(team, message, value)
@@ -87,14 +91,14 @@ class AdminEditUsersHandler(BaseHandler):
             self.redirect("/admin/users")
 
     def edit_team(self):
-        """ Edits the team object """
+        """Edits the team object"""
         try:
             team = Team.by_uuid(self.get_argument("uuid", ""))
             if team is None:
                 raise ValidationError("Team does not exist")
             team.name = self.get_argument("name", team.name)
             team.motto = self.get_argument("motto", team.motto)
-            team.money = self.get_argument("money", team.money)
+            team.set_score("admin", self.get_argument("money", team.money))
             team.notes = self.get_argument("notes", "")
             if hasattr(self.request, "files") and "avatarfile" in self.request.files:
                 team.avatar = self.request.files["avatarfile"][0]["body"]
@@ -111,7 +115,7 @@ class AdminEditUsersHandler(BaseHandler):
             self.render("admin/view/users.html", errors=[str(error)])
 
     def edit_user(self):
-        """ Update user objects in the database """
+        """Update user objects in the database"""
         try:
             user = User.by_uuid(self.get_argument("uuid", ""))
             if user is None:
@@ -215,14 +219,16 @@ class AdminEditUsersHandler(BaseHandler):
         team.motto = ""
         team._avatar = identicon(team.name, 6)
         if self.config.banking:
-            team.money = self.config.starting_team_money
+            team.set_score("start", self.config.starting_team_money)
         else:
-            team.money = 0
+            team.set_score("start", 0)
         level_0 = GameLevel.by_number(0)
         if not level_0:
             level_0 = GameLevel.all()[0]
         team.game_levels.append(level_0)
         self.dbsession.add(team)
+        self.dbsession.commit()
+        self.event_manager.push_score_update()
         return team
 
 
@@ -249,6 +255,11 @@ class AdminDeleteUsersHandler(BaseHandler):
         else:
             logging.info("Deleted User: '%s'" % str(user.handle))
             EventManager.instance().deauth(user)
+            tokens = EmailToken.by_user_id(user.id, all=True)
+            if tokens:
+                for token in tokens:
+                    self.dbsession.delete(token)
+                self.dbsession.commit()
             self.dbsession.delete(user)
             self.dbsession.commit()
             self.event_manager.push_score_update()
@@ -269,6 +280,11 @@ class AdminDeleteUsersHandler(BaseHandler):
                     )
                     return
                 EventManager.instance().deauth(user)
+                tokens = EmailToken.by_user_id(user.id, all=True)
+                if tokens:
+                    for token in tokens:
+                        self.dbsession.delete(token)
+                    self.dbsession.commit()
             self.dbsession.delete(team)
             self.dbsession.commit()
             self.event_manager.push_score_update()
@@ -288,21 +304,25 @@ class AdminBanHammerHandler(BaseHandler):
         self.redirect("/user")
 
     def ban_config(self):
-        """ Configure the automatic ban settings """
+        """Configure the automatic ban settings"""
         if self.get_argument("automatic_ban", "") == "true":
             self.application.settings["automatic_ban"] = True
+            self.config.automatic_ban = True
             try:
                 threshold = abs(int(self.get_argument("threshold_size", "10")))
             except ValueError:
                 threshold = 10
             logging.info("Automatic ban enabled, with threshold of %d" % threshold)
             self.application.settings["blacklist_threshold"] = threshold
+            self.config.blacklist_threshold = threshold
         else:
             logging.info("Automatic ban disabled")
             self.application.settings["automatic_ban"] = False
+            self.config.automatic_ban = False
+        save_config()
 
     def ban_add(self):
-        """ Add an ip address to the banned list """
+        """Add an ip address to the banned list"""
         try:
             ip = self.get_argument("ip", "")
             if not IPAddress(ip).is_loopback():
@@ -312,37 +332,70 @@ class AdminBanHammerHandler(BaseHandler):
             pass  # Don't care about exceptions here
 
     def ban_clear(self):
-        """ Remove an ip from the banned list """
+        """Remove an ip from the banned list"""
         ip = self.get_argument("ip", "")
-        if ip in self.application.settings["blacklisted_ips"]:
+        if ip == "all":
+            self.application.settings["failed_logins"] = {}
+            self.application.settings["blacklisted_ips"] = []
+        elif ip in self.application.settings["blacklisted_ips"]:
             logging.info("Removed ban on ip: %s" % ip)
             self.application.settings["blacklisted_ips"].remove(ip)
-        self.application.settings["failed_logins"][ip] = 0
+        if ip in self.application.settings["failed_logins"]:
+            self.application.settings["failed_logins"][ip] = 0
 
 
 class AdminLockHandler(BaseHandler):
 
-    """ Used to manually lock/unlocked accounts """
+    """Used to manually lock/unlocked accounts"""
 
     @restrict_ip_address
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def post(self, *args, **kwargs):
-        """ Calls an lock based on URL """
-        uri = {"user": self.lock_user, "box": self.lock_box}
+        """Calls an lock based on URL"""
+        uri = {
+            "user": self.lock_user,
+            "box": self.lock_box,
+            "flag": self.lock_flag,
+            "corp": self.lock_corp,
+            "level": self.lock_level,
+        }
         if len(args) and args[0] in uri:
             uri[args[0]]()
         else:
             self.render("public/404.html")
 
     def lock_user(self):
-        """ Toggle account lock """
+        """Toggle account lock"""
         user = User.by_uuid(self.get_argument("uuid", ""))
         if user is not None:
             user.locked = False if user.locked else True
             self.dbsession.add(user)
             self.dbsession.commit()
+            self.event_manager.push_score_update()
             self.redirect("/admin/users")
+        else:
+            self.render("public/404.html")
+
+    def lock_corp(self):
+        uuid = self.get_argument("uuid", "")
+        corp = Corporation.by_uuid(uuid)
+        if corp is not None:
+            corp.locked = False if corp.locked else True
+            self.dbsession.add(corp)
+            self.dbsession.commit()
+            self.redirect("/admin/view/game_objects#%s" % corp.uuid)
+        else:
+            self.render("public/404.html")
+
+    def lock_level(self):
+        uuid = self.get_argument("uuid", "")
+        level = GameLevel.by_uuid(uuid)
+        if level is not None:
+            level.locked = False if level.locked else True
+            self.dbsession.add(level)
+            self.dbsession.commit()
+            self.redirect("/admin/view/game_levels")
         else:
             self.render("public/404.html")
 
@@ -350,10 +403,35 @@ class AdminLockHandler(BaseHandler):
         uuid = self.get_argument("uuid", "")
         box = Box.by_uuid(uuid)
         if box is not None:
-            box.locked = False if box.locked else True
-            self.dbsession.add(box)
+            if box.locked_corp():
+                self.render(
+                    "admin/view/game_objects.html",
+                    success=None,
+                    errors=["Box Locked by Corporation Lock"],
+                )
+            elif box.locked_level():
+                self.render(
+                    "admin/view/game_objects.html",
+                    success=None,
+                    errors=["Box Locked by Level Lock"],
+                )
+            else:
+                box.locked = False if box.locked else True
+                self.dbsession.add(box)
+                self.dbsession.commit()
+                self.redirect("/admin/view/game_objects#%s" % box.uuid)
+        else:
+            self.render("public/404.html")
+
+    def lock_flag(self):
+        uuid = self.get_argument("uuid", "")
+        print(uuid)
+        flag = Flag.by_uuid(uuid)
+        if flag is not None:
+            flag.locked = False if flag.locked else True
+            self.dbsession.add(flag)
             self.dbsession.commit()
-            self.redirect("/admin/view/game_objects#%s" % box.uuid)
+            self.redirect("/admin/view/game_objects#%s" % flag.uuid)
         else:
             self.render("public/404.html")
 

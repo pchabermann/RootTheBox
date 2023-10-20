@@ -33,33 +33,33 @@ from builtins import str
 
 
 class IpAddress(DatabaseObject):
-    """ Wraps the netaddr IPAddress class """
+    """Wraps the netaddr IPAddress class"""
 
     uuid = Column(String(36), unique=True, nullable=False, default=lambda: str(uuid4()))
 
     box_id = Column(Integer, ForeignKey("box.id"), nullable=False)
     _address = Column(String(80))
     _ip_address = None
-    visable = Column(Boolean, default=True)
+    visible = Column(Boolean, default=True)
 
     @classmethod
     def all(cls):
-        """ Returns a list of all objects in the database """
+        """Returns a list of all objects in the database"""
         return dbsession.query(cls).all()
 
     @classmethod
     def by_id(cls, _id):
-        """ Returns a the object with id of _id """
+        """Returns a the object with id of _id"""
         return dbsession.query(cls).filter_by(id=_id).first()
 
     @classmethod
     def by_uuid(cls, _uuid):
-        """ Return and object based on a _uuid """
+        """Return and object based on a _uuid"""
         return dbsession.query(cls).filter_by(uuid=_uuid).first()
 
     @classmethod
     def by_address(cls, address):
-        """ Return and object based on an address """
+        """Return and object based on an address"""
         return dbsession.query(cls).filter_by(_address=address).first()
 
     @classmethod

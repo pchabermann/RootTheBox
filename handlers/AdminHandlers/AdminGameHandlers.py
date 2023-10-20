@@ -40,21 +40,19 @@ from models.User import ADMIN_PERMISSION
 from models.Team import Team
 from models.Theme import Theme
 from models.Penalty import Penalty
-from models.Snapshot import Snapshot
-from models.SnapshotTeam import SnapshotTeam
 from models.SourceCode import SourceCode
 from models.Corporation import Corporation
 from models.Category import Category
 from models.Notification import Notification
 from models.RegistrationToken import RegistrationToken
+from models.EmailToken import EmailToken
 from libs.EventManager import EventManager
 from libs.SecurityDecorators import *
 from libs.StringCoding import encode, decode
 from libs.ValidationError import ValidationError
 from libs.ConfigHelpers import save_config
-from libs.GameHistory import GameHistory
 from libs.ConsoleColors import *
-from libs.Scoreboard import score_bots
+from libs.Scoreboard import score_bots, Scoreboard
 from handlers.BaseHandlers import BaseHandler
 from string import printable
 from setup.xmlsetup import import_xml
@@ -66,17 +64,36 @@ from datetime import datetime
 
 class AdminGameHandler(BaseHandler):
 
-    """ Start or stop the game """
+    """Start or stop the game"""
 
     @restrict_ip_address
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def post(self, *args, **kwargs):
+        self.admin_actions(self)
+        self.redirect("/user")
+
+    @staticmethod
+    def isOn(value):
+        return value == "on" or value == "true"
+
+    @staticmethod
+    def admin_actions(self):
         start_game = self.get_argument("start_game", None)
+        stop_game = self.get_argument("stop_game", None)
         suspend_reg = self.get_argument("suspend_registration", None)
         set_timer = self.get_argument("countdown_timer", None)
         hide_scoreboard = self.get_argument("hide_scoreboard", None)
+        show_scoreboard = self.get_argument("show_scoreboard", None)
         stop_timer = self.get_argument("stop_timer", None)
+        start_timer = self.get_argument("start_timer", None)
+
+        if start_game is None and stop_game is not None:
+            start_game = "false" if stop_game == "true" else "true"
+        if stop_timer is None and start_timer is not None:
+            stop_timer = "false" if start_timer == "true" else "true"
+        if hide_scoreboard is None and show_scoreboard is not None:
+            hide_scoreboard = "false" if show_scoreboard == "true" else "true"
 
         if (
             start_game
@@ -134,11 +151,13 @@ class AdminGameHandler(BaseHandler):
                 ] = options.global_notification
                 options.global_notification = False
                 self.event_manager.push_scoreboard()
-
-        self.redirect("/user")
-
-    def isOn(self, value):
-        return value == "on"
+        return {
+            "start_game": self.application.settings["game_started"],
+            "suspend_registration": self.application.settings["suspend_registration"],
+            "hide_scoreboard": self.application.settings["hide_scoreboard"],
+            "countdown_timer": self.application.settings["countdown_timer"],
+            "stop_timer": self.application.settings["stop_timer"],
+        }
 
 
 class AdminMessageHandler(BaseHandler):
@@ -161,13 +180,13 @@ class AdminMessageHandler(BaseHandler):
 
 class AdminRegTokenHandler(BaseHandler):
 
-    """ Manages registration tokens """
+    """Manages registration tokens"""
 
     @restrict_ip_address
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def get(self, *args, **kwargs):
-        """ Call method based on URI """
+        """Call method based on URI"""
         uri = {"create": self.create, "view": self.view}
         if len(args) and args[0] in uri:
             uri[args[0]]()
@@ -178,7 +197,7 @@ class AdminRegTokenHandler(BaseHandler):
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def post(self, *args, **kwargs):
-        """ Used to delete regtokens """
+        """Used to delete regtokens"""
         token_value = self.get_argument("token_value", "")
         reg_token = RegistrationToken.by_value(token_value)
         if reg_token is not None:
@@ -189,20 +208,20 @@ class AdminRegTokenHandler(BaseHandler):
             self.render("admin/view/token.html", errors=["Token does not exist"])
 
     def create(self):
-        """ Adds a registration token to the db and displays the value """
+        """Adds a registration token to the db and displays the value"""
         token = RegistrationToken()
         self.dbsession.add(token)
         self.dbsession.commit()
         self.render("admin/create/token.html", token=token)
 
     def view(self):
-        """ View all reg tokens """
+        """View all reg tokens"""
         self.render("admin/view/token.html", errors=None)
 
 
 class AdminSourceCodeMarketHandler(BaseHandler):
 
-    """ Add source code files to the source code market """
+    """Add source code files to the source code market"""
 
     @restrict_ip_address
     @authenticated
@@ -239,7 +258,7 @@ class AdminSourceCodeMarketHandler(BaseHandler):
             raise ValidationError("The selected box does not exist")
 
     def create_source_code(self, box, price):
-        """ Save file data and create object in database """
+        """Save file data and create object in database"""
         description = self.get_argument("description", "")
         file_name = self.request.files["source_archive"][0]["filename"]
         source_code = SourceCode(
@@ -252,7 +271,7 @@ class AdminSourceCodeMarketHandler(BaseHandler):
         self.dbsession.commit()
 
     def delete_source_code(self):
-        """ Delete source code file """
+        """Delete source code file"""
         uuid = self.get_argument("box_uuid", "")
         box = Box.by_uuid(uuid)
         if box is not None and box.source_code is not None:
@@ -266,7 +285,7 @@ class AdminSourceCodeMarketHandler(BaseHandler):
 
 class AdminSwatHandler(BaseHandler):
 
-    """ Manage SWAT requests """
+    """Manage SWAT requests"""
 
     @restrict_ip_address
     @authenticated
@@ -275,7 +294,7 @@ class AdminSwatHandler(BaseHandler):
         self.render_page()
 
     def render_page(self, errors=None):
-        """ Render page with extra arguments """
+        """Render page with extra arguments"""
         if errors is not None and not isinstance(errors, list):
             errors = [str(errors)]
         self.render(
@@ -290,7 +309,7 @@ class AdminSwatHandler(BaseHandler):
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def post(self, *args, **kwargs):
-        """ Accept/Complete bribes """
+        """Accept/Complete bribes"""
         uri = {"/accept": self.accept_bribe, "/complete": self.complete_bribe}
         if len(args) and args[0] in uri:
             uri[args[0]]()
@@ -298,7 +317,7 @@ class AdminSwatHandler(BaseHandler):
             self.render("public/404.html")
 
     def accept_bribe(self):
-        """ Accept bribe, and lock user's account """
+        """Accept bribe, and lock user's account"""
         swat = Swat.by_uuid(self.get_argument("uuid", ""))
         if swat is not None and not swat.completed:
             logging.info("Accepted SWAT with uuid: %s", swat.uuid)
@@ -316,7 +335,7 @@ class AdminSwatHandler(BaseHandler):
             self.render_page("Requested SWAT object does not exist")
 
     def complete_bribe(self):
-        """ Complete bribe and unlock user's account """
+        """Complete bribe and unlock user's account"""
         swat = Swat.by_uuid(self.get_argument("uuid", ""))
         if swat is not None and not swat.completed:
             logging.info("Completed SWAT with uuid: %s", swat.uuid)
@@ -336,7 +355,7 @@ class AdminSwatHandler(BaseHandler):
 
 class AdminConfigurationHandler(BaseHandler):
 
-    """ Allows the admin to change some of the configuraiton options """
+    """Allows the admin to change some of the configuration options"""
 
     def get_int(self, name, default=0):
         try:
@@ -417,7 +436,7 @@ class AdminConfigurationHandler(BaseHandler):
         self.render("admin/configuration.html", errors=errors, config=self.config)
 
     def config_bots(self):
-        """ Updates bot config, and starts/stops the botnet callback """
+        """Updates bot config, and starts/stops the botnet callback"""
         self.config.use_bots = self.get_bool("use_bots", True)
         if (
             self.config.use_bots
@@ -438,7 +457,7 @@ class AdminGarbageCfgHandler(BaseHandler):
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def get(self, *args, **kwargs):
-        """ Download a Box's garbage file """
+        """Download a Box's garbage file"""
         box = Box.by_uuid(self.get_argument("uuid", ""))
         if box is not None:
             data = box.get_garbage_cfg()
@@ -457,7 +476,7 @@ class AdminGitStatusHandler(BaseHandler):
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def get(self, *args, **kwargs):
-        """ Get the status of Git """
+        """Get the status of Git"""
         sp = subprocess.Popen(
             ["git", "fetch"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
@@ -492,7 +511,7 @@ class AdminGitStatusHandler(BaseHandler):
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def post(self, *args, **kwargs):
-        """ Update RTB to the latest repository code. """
+        """Update RTB to the latest repository code."""
         os.system("git pull")
         """
         Shutdown the actual process and restart the service.
@@ -503,7 +522,7 @@ class AdminGitStatusHandler(BaseHandler):
         os.execl("./setup/restart.sh", "./setup/restart.sh")
 
     def current_time(self):
-        """ Nicely formatted current time as a string """
+        """Nicely formatted current time as a string"""
         return str(datetime.now()).split(" ")[1].split(".")[0]
 
 
@@ -515,14 +534,14 @@ class AdminExportHandler(BaseHandler):
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def get(self, *args, **kwargs):
-        """ Export to document formats """
+        """Export to document formats"""
         self.render("admin/export.html", errors=None)
 
     @restrict_ip_address
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def post(self, *args, **kwargs):
-        """ Include the requests exports in the xml dom """
+        """Include the requests exports in the xml dom"""
         root = ET.Element("rootthebox")
         root.set("api", self.API_VERSION)
         if self.get_argument("game_config", "") == "true":
@@ -533,7 +552,7 @@ class AdminExportHandler(BaseHandler):
         self.write_xml(xml_dom.toprettyxml())
 
     def write_xml(self, xml_doc):
-        """ Write XML document to page """
+        """Write XML document to page"""
         self.set_header("Content-Type", "text/xml")
         self.set_header(
             "Content-disposition",
@@ -597,7 +616,7 @@ class AdminImportXmlHandler(BaseHandler):
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def get(self, *args, **kwargs):
-        """ Import setup files """
+        """Import setup files"""
         self.render("admin/import.html", success=None, errors=None)
 
     @restrict_ip_address
@@ -622,7 +641,7 @@ class AdminImportXmlHandler(BaseHandler):
             self.render("admin/import.html", success=None, errors=["No file data."])
 
     def _get_tmp_file(self):
-        """ Creates a tmp file with the file data """
+        """Creates a tmp file with the file data"""
         data = self.request.files["xml_file"][0]["body"]
         tmp_file = NamedTemporaryFile(delete=False)
         tmp_file.write(data)
@@ -644,42 +663,43 @@ class AdminImportXmlHandler(BaseHandler):
             logging.info("Starting botnet callback function")
             self.application.settings["score_bots_callback"].start()
 
-        logging.info("Restarting history callback function")
-        game_history = GameHistory.instance()
-        self.application.settings["history_callback"].stop()
-        self.application.history_callback = PeriodicCallback(
-            game_history.take_snapshot, options.history_snapshot_interval
-        )
-        self.application.settings["history_callback"].start()
-
 
 class AdminResetHandler(BaseHandler):
     @restrict_ip_address
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def get(self, *args, **kwargs):
-        """ Reset Game Information """
+        """Reset Game Information"""
         self.render("admin/reset.html", success=None, errors=None)
 
     @restrict_ip_address
     @authenticated
     @authorized(ADMIN_PERMISSION)
     def post(self, *args, **kwargs):
+        success, errors = self.reset(self.dbsession)
+        Scoreboard.update_gamestate(self)
+        self.event_manager.push_score_update()
+        self.flush_memcached()
+        self.render("admin/reset.html", success=success, errors=errors)
+
+    @staticmethod
+    def reset(dbsession):
         """
         Reset the Game
         """
         errors = []
         success = None
         try:
-            users = User.all()
+            users = User.all_users()
             for user in users:
                 user.money = 0
             teams = Team.all()
             for team in teams:
+                team.game_history = []
                 if options.banking:
-                    team.money = options.starting_team_money
+                    team.set_score("start", options.starting_team_money)
                 else:
-                    team.money = 0
+                    team.set_score("start", 0)
                 team.flags = []
                 team.hints = []
                 team.boxes = []
@@ -689,43 +709,116 @@ class AdminResetHandler(BaseHandler):
                 if not level_0:
                     level_0 = GameLevel.all()[0]
                 team.game_levels = [level_0]
-                self.dbsession.add(team)
-            self.dbsession.commit()
-            self.dbsession.flush()
+                dbsession.add(team)
+            dbsession.commit()
+            dbsession.flush()
             for team in teams:
                 for paste in team.pastes:
-                    self.dbsession.delete(paste)
+                    dbsession.delete(paste)
                 for shared_file in team.files:
                     shared_file.delete_data()
-                    self.dbsession.delete(shared_file)
-            self.dbsession.commit()
-            self.dbsession.flush()
+                    dbsession.delete(shared_file)
+            dbsession.commit()
+            dbsession.flush()
             Penalty.clear()
             Notification.clear()
-            snapshot = Snapshot.all()
-            for snap in snapshot:
-                self.dbsession.delete(snap)
-            self.dbsession.commit()
-            snapshot_team = SnapshotTeam.all()
-            for snap in snapshot_team:
-                self.dbsession.delete(snap)
-            self.dbsession.commit()
-            game_history = GameHistory.instance()
-            game_history.take_snapshot()  # Take starting snapshot
+            swats = Swat.all()
+            for swat in swats:
+                dbsession.delete(swat)
+            dbsession.commit()
+            tokens = EmailToken.all()
+            if tokens is not None:
+                for token in tokens:
+                    dbsession.delete(token)
+            dbsession.commit()
             flags = Flag.all()
             for flag in flags:
                 # flag.value = flag.value allows a fallback to when original_value was used
                 # Allows for the flag value to be reset if dynamic scoring was used
                 # Can be removed after depreciation timeframe
                 flag.value = flag.value
-                self.dbsession.add(flag)
-            self.dbsession.commit()
-            self.dbsession.flush()
-            self.event_manager.push_score_update()
-            self.flush_memcached()
+                dbsession.add(flag)
+            dbsession.commit()
+            dbsession.flush()
             success = "Successfully Reset Game"
-            self.render("admin/reset.html", success=success, errors=errors)
+            return (success, errors)
         except BaseException as e:
             errors.append("Failed to Reset Game")
             logging.error(str(e))
-            self.render("admin/reset.html", success=None, errors=errors)
+            return (None, errors)
+
+
+class AdminResetDeleteHandler(BaseHandler):
+    @restrict_ip_address
+    @authenticated
+    @authorized(ADMIN_PERMISSION)
+    def get(self, *args, **kwargs):
+        """Reset Game Information"""
+        self.render("admin/reset.html", success=None, errors=None)
+
+    @restrict_ip_address
+    @authenticated
+    @authorized(ADMIN_PERMISSION)
+    def post(self, *args, **kwargs):
+        success, errors = self.reset(self.dbsession)
+        Scoreboard.update_gamestate(self)
+        self.event_manager.push_score_update()
+        self.flush_memcached()
+        self.render("admin/reset.html", success=success, errors=errors)
+
+    @staticmethod
+    def reset(dbsession):
+        """
+        Reset the Game - Delete all teams
+        """
+        errors = []
+        success = None
+        try:
+            users = User.all_users()
+            teams = Team.all()
+            for team in teams:
+                for paste in team.pastes:
+                    dbsession.delete(paste)
+                for shared_file in team.files:
+                    shared_file.delete_data()
+                    dbsession.delete(shared_file)
+            dbsession.commit()
+            dbsession.flush()
+            Penalty.clear()
+            Notification.clear()
+            swats = Swat.all()
+            for swat in swats:
+                dbsession.delete(swat)
+            dbsession.commit()
+            tokens = EmailToken.all()
+            for token in tokens:
+                dbsession.delete(token)
+            dbsession.commit()
+            for user in users:
+                dbsession.delete(user)
+            dbsession.commit()
+            for team in teams:
+                dbsession.delete(team)
+            dbsession.commit()
+            flags = Flag.all()
+            for flag in flags:
+                # flag.value = flag.value allows a fallback to when original_value was used
+                # Allows for the flag value to be reset if dynamic scoring was used
+                # Can be removed after depreciation timeframe
+                flag.value = flag.value
+                dbsession.add(flag)
+            dbsession.commit()
+            dbsession.flush()
+
+            if options.teams:
+                success = "Successfully Deleted Teams"
+            else:
+                success = "Successfully Deleted Players"
+            return (success, errors)
+        except BaseException as e:
+            if options.teams:
+                errors.append("Failed to Delete Teams")
+            else:
+                errors.append("Failed to Delete Players")
+            logging.error(str(e))
+            return (None, errors)

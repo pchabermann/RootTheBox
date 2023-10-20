@@ -99,7 +99,12 @@
                             <a id="uploadbutton" class="btn btn-primary" href="#">{{ _("Upload Avatar") }}</a>&nbsp;&nbsp;(w500 x h250)
                             <input id="user-avatar" name="avatar" type="file" accept="image/bmp,image/jpeg,image/gif,image/png" style="display: none;"/>
                         </div>
+                        {% if options.use_recaptcha %}
+                        <br>
+                        {% module Recaptcha() %}
+                        {% end %}
                     </div>
+                    
                 {% end %}
                 <div class="control-group">
                     <label class="control-label" for="handle">
@@ -110,7 +115,7 @@
                         <input required id="handle" name="handle" maxlength="16" minlength="3" placeholder="{{ _('Player Alias') }}" type="text"
                             rel="popover" pattern="^[a-zA-Z0-9_\-\.]{3,16}$"
                             data-original-title="{{ _('Player Alias') }}"
-                            data-content="{{_('Your handle must be 3-16 alpha-numeric characters.  Underscore, dash, and dots allowed.')}}" />
+                            data-content="{{_('Your handle must be 3-16 alphanumeric characters.  Underscore, dash, and dots allowed.')}}" />
                     </div>
                 </div>
                 <div class="control-group">
@@ -121,7 +126,7 @@
                         <input required id="playername" name="playername" maxlength="64" minlength="3" placeholder="{{_('Name')}}" type="text"
                             rel="popover" pattern="^[a-zA-Z0-9 ]{3,64}$"
                             data-original-title="{{ _('Player Name') }}"
-                            data-content="{{_('Your name, visible to game administrators.  Your name can be 3-64 alpha-numeric characters')}}" />
+                            data-content="{{_('Your name, visible to game administrators.  Your name can be 3-64 alphanumeric characters')}}" />
                     </div>
                 </div>
                 {% if options.require_email %}
@@ -148,7 +153,7 @@
                                 <label class="control-label" for="team_name">{{ _("Team Name") }}</label>
                                 <div class="controls">
                                     <input id="team-name" name="team_name" maxlength="24" minlength="3" type="text" placeholder="{{ _('Team Name') }}"
-                                        rel="popover"
+                                        rel="popover" pattern="^[a-zA-Z0-9 _\-\.]{3,24}$"
                                         data-original-title="{{_('New Team Name')}}"
                                         data-content="{{_('Choose a name for your new team!')}} [3-24 {{_('Characters')}}]" >
                                 </div>
@@ -157,7 +162,7 @@
                                 <label class="control-label" for="motto">{{ _("Motto") }}</label>
                                 <div class="controls">
                                     <input id="motto" name="motto" maxlength="32" type="text" placeholder="{{ _('Team Motto') }}"
-                                        rel="popover" pattern="^[a-zA-Z0-9_\-\.]{,32}$"
+                                        rel="popover" pattern="^[a-zA-Z0-9 _\-\.]{,32}$"
                                         data-original-title="{{_('Team Motto')}}"
                                         data-content="{{_('Optional')}}: {{_('What is your teams motto?')}} [{{ _('Max') }}: 32 {{_('Characters')}}]">
                                 </div>
@@ -207,17 +212,17 @@
                             data-content="{{_('Enter the same password as before')}}" />
                     </div>
                 </div>
-                {% if options.banking %}
-                <div class="control-group">
-                    <label class="control-label" for="bpass1">{{ _("Bank Account Password") }}</label>
-                    <div class="controls">
-                        <input required id="bpass" name="bpass" maxlength="{{ options.max_password_length }}" placeholder="{{ _('Bank Account Password') }}" type="password"
-                            autocomplete="off"
-                            rel="popover"
-                            data-original-title="{{_('Password')}}"
-                            data-content="{{_('Used to secure your (in-game) bank account.')}} [{{ _('Max') }}: {{ options.max_password_length }} {{_('Characters')}}].  {{_('Please do NOT enter your real bank account password.')}}" />
-                    </div>
-                </div>
+                {% if options.banking and not set(["Password Security", "Federal Reserve"]).isdisjoint(options.allowed_market_items) %}
+					<div class="control-group">
+						<label class="control-label" for="bpass1">{{ _("Bank Account Password") }}</label>
+						<div class="controls">
+							<input required id="bpass" name="bpass" maxlength="{{ options.max_password_length }}" placeholder="{{ _('Bank Account Password') }}" type="password"
+								autocomplete="off"
+								rel="popover"
+								data-original-title="{{_('Password')}}"
+								data-content="{{_('Used to secure your (in-game) bank account.')}} [{{ _('Max') }}: {{ options.max_password_length }} {{_('Characters')}}].  {{_('Please do NOT enter your real bank account password.')}}" />
+						</div>
+					</div>
                 {% end %}
                 {% if options.restrict_registration %}
                     <div class="control-group">

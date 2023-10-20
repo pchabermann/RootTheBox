@@ -7,6 +7,7 @@ Accept Bribe?,Bestechung annehmen?
 Accept this bribe?,Diese Bestechung annehmen?
 Accepted,Akzeptiert
 Accepted / In Jail,Akzeptiert / Im Gefängnis
+Access,Zugriff
 Account Locked!,Konto gesperrt!
 Account Password,Konto Passwort
 Active Bots,Aktive Bots
@@ -30,6 +31,8 @@ Admin Notes,Admin-Hinweise
 Administrator Panel,Administrator Panel
 Admins,Admins
 All Notifications,Alle Benachrichtigungen
+"Allows your team access to the Source Code Black Market where you can purchase leaked source code for certain target boxes.","Erlaubt ihrem Team Zugriff auf den Quellcode-Schwarzmarkt, welcher es ihnen erlaubt durchgesickerte Quellcodes für bestimmtes Ziele zu kaufen."
+"Allows your team to upgrade their password hashes to more secure algorithms such as SHA1, and SHA256.","Erlaubt ihrem Team ihre Passwort-Hashes auf einen sichereren Algorithmus wie z.B. SHA1 und SHA256 zu aktualiseren."
 and logos in export.,und Logos im Export.
 and so on,und so weiter
 Apply penalty on attempt,Bestrafung beim Versuch
@@ -55,6 +58,7 @@ Authenticate,Authentifizieren
 Authentication Failure,Authentifizierungsfehler
 Authentication Required,Authentifizierung erforderlich
 Automatic Ban,Automatisches Verbot
+Available,Verfügbar
 Avatar,Benutzerbild
 Backup/Restore,Backup wiederherstellen
 Ban IP Address,IP-Adresse sperren
@@ -129,6 +133,7 @@ Completed Bribes,Abgeschlossene Bestechungen
 Completion Message,Abschlussnachricht
 completion of Level,Abschluss des Levels
 Completion Reward,Abschlussbelohnung
+configuration,Konfiguration
 Configuration,Konfiguration
 Confirm,Bestätigen
 Confirm Account Password,Bestätigen Sie das Konto-Passwort
@@ -203,7 +208,7 @@ Details,Einzelheiten
 Difficulty,Schwierigkeit
 Difficulty Rating,Schwierigkeitsgrad
 Disable,Deaktivieren
-Disabling this option will skip the story line and give the player an instant capture message.,"Wenn Sie diese Option deaktivieren, wird die Story übersprungen und der Spieler erhält eine sofortige Eroberungsnachricht."
+Disabling this option will skip the storyline and give the player an instant capture message.,"Wenn Sie diese Option deaktivieren, wird die Story übersprungen und der Spieler erhält eine sofortige Eroberungsnachricht."
 Display Hints Taken,Genommene Hinweise anzeigen
 Do not delete or modify community flags unless instructed. Do not attack other players unless outlined in the game goals.,"Community-Flaggen dürfen nur nach Anweisung gelöscht oder geändert werden. Andere Spieler dürfen nicht angegriffen werden, außer es ist in den Spielzielen angegeben."
 Download,Herunterladen
@@ -214,7 +219,7 @@ Dynamic Scoring,Dynamisches Punkten
 Each flag has a submit.  The player will choose the flag they intend to capture.,"Jede Flagge hat ein Submit. Der Spieler wählt die Flagge, die er erobern möchte."
 "Each player will target challenges of varying difficulty and sophistication, attempting to collect flags and win glory.  Good luck!","Jeder Spieler visiert Herausforderungen unterschiedlicher Schwierigkeit und Rafinesse an und versucht, Flaggen zu sammeln und Ruhm zu erlangen. Viel Glück!"
 Edit,Bearbeiten
-Edit Access,Toegang bewerken
+Edit Access,Zugriff bearbeiten
 Edit Account,Konto bearbeiten
 Edit Box,Box bearbeiten
 Edit Category,Kategorie bearbeiten
@@ -234,7 +239,7 @@ Enable,Aktivieren
 "Enabling this feature will allow players to create their own teams during registration.  If this option is disabled, the admin must create teams for players to join.","Wenn Sie diese Funktion aktivieren, können die Spieler während der Registrierung ihre eigenen Teams erstellen. Wenn diese Option deaktiviert ist, muss der Administrator Teams erstellen, denen Spieler beitreten können."
 Enabling this feature will allow players to share code (pastebin) and files in-game.  Disabling this feature will remove these options from the Tools Menu.,Durch Aktivieren dieser Funktion können Spieler Code (Pastebin) und Dateien im Spiel teilen. Durch Deaktivieren dieser Funktion werden diese Optionen aus dem Menü Extras entfernt.
 "Enabling this feature will allow teams to purchase upgrades, such as the Federal Reserve, Source Code Market, or SWAT.","Wenn Sie diese Funktion aktivieren, können Teams Upgrades wie die Federal Reserve, den Source Code Market oder SWAT erwerben."
-"Enabling this feature will allow the game to display flag or box capture messages that may be added. By default, the game follows the storyline of Morris, an employer that assigns missions.","Durch Aktivieren dieser Funktion kann das Spiel Flaggen- oder Box-Capture-Meldungen anzeigen, die hinzugefügt werden können. Standardmäßig folgt das Spiel der Handlung von Morris, einem Arbeitgeber, der Missionen zuweist."
+"Enabling this feature will allow the game to display flag or box capture messages that may be added. By default, the game follows the story line of Morris, an employer that assigns missions.","Durch Aktivieren dieser Funktion kann das Spiel Flaggen- oder Box-Capture-Meldungen anzeigen, die hinzugefügt werden können. Standardmäßig folgt das Spiel der Handlung von Morris, einem Arbeitgeber, der Missionen zuweist."
 "Enabling this feature will apply a penalty for incorrect capture attempts.  The penalty is an instant deduction from the score, not a decrease in the flag value.","Durch Aktivieren dieser Funktion werden falsche Erfassungsversuche bestraft. Die Strafe ist ein sofortiger Abzug von der Punktzahl, keine Abnahme des Flaggenwerts."
 "Enabling this feature will decrease the reward for a flag based on the number of captures.  If this option is disabled, the flag value remains consistent as other players capture it.","Durch Aktivieren dieser Funktion wird die Belohnung für ein Flag basierend auf der Anzahl der Erfassungen verringert. Wenn diese Option deaktiviert ist, bleibt der Flaggenwert konsistent, wenn andere Spieler ihn erfassen."
 Enabling this feature will display the number of hints taken on the scoreboard by a team or player.  Useful when hints are free.  A lower hint count is used for sorting when scores or flags are equal.  Disabling this option will remove the hint count from the scoreboard.,"Wenn Sie diese Funktion aktivieren, wird die Anzahl der von einer Mannschaft oder einem Spieler auf der Anzeigetafel angezeigten Hinweise angezeigt. Nützlich, wenn Hinweise frei sind. Eine niedrigere Anzahl von Hinweisen wird zum Sortieren verwendet, wenn Punktzahlen oder Flags gleich sind. Wenn Sie diese Option deaktivieren, wird die Anzahl der Hinweise von der Anzeigetafel entfernt."
@@ -292,6 +297,8 @@ Flags Captured,Eroberte Flaggen
 Flags on,Flaggen auf
 for,zum
 Forbidden,verboten
+"Gain access to the internal New York Federal Reserve banking system, allowing you to transfer funds to/from accounts.","Erhalte Zugriff auf das interne Banksystem der New York Federal Reserve, um Kapital zu/von ihrem Account zu transferieren."
+"Gain access to the internal police computer system, allowing you to insert fraudlent arrest warrents for other players.","Erhalte Zugriff auf das interne Computersystem der Polizei, um betrügerische Haftbefehle für andere Spieler einzutragen."
 Game,Spiel
 Game Control,Spielsteuerung
 Game Information,Spielinformationen
@@ -299,7 +306,9 @@ Game Level,Spiellevel
 Game Levels,Spiellevels
 Game Management,Spielverwaltung
 Game Materials,Spielmaterialien
+Game Metrics,Spielmetriken
 Game Name,Spielname
+Game Points,Spielpunkte
 Game Progress,Spielfortschritt
 Garbage File,Mülleimer
 Get help with,Holen Sie sich Hilfe bei
@@ -307,7 +316,8 @@ Get your registration token from reception,Holen Sie sich Ihren Registrierungs-T
 Glitch in the Matrix,Glitch in der Matrix
 Global Notifications,Globale Benachrichtigungen
 Handle,Identifikator
-Hide scoreboard during countdown,Scorebord verbergen tijdens aftellen
+Hidden,Verborgen
+Hide scoreboard during countdown,Scorebord während des Countdowns verbergen
 Hint,Hinweis
 Hint not yet taken,Hinweis noch nicht genutzt
 Hint Taken,Hinweis genutzt
@@ -320,6 +330,7 @@ How should the next level unlock?,Wie soll das nächste Level freigeschaltet wer
 I accept the,Ich akzeptiere die 
 "If the flag selection is left empty, the hint will be considered a Box Hint.","Wenn die Flaggen-Auswahl leer gelassen wird, wird der Hinweis berücksichtigt"
 "If this option is disabled, there is no cost for submitting incorrect flags.","Wenn diese Option deaktiviert ist, fallen keine Kosten für die Übermittlung falscher Flaggen an."
+If you have any questions or need help do not hestitate to ask one of the organizers., Wenn Sie Fragen oder Probleme haben zögern Sie nicht sich an einen der Organisatoren zu wenden.
 Import File,Datei importieren
 Import XML,XML importieren
 Import XML,XML importieren
@@ -352,11 +363,13 @@ Level,Level
 Level Name,Level-Name
 Level Number,Level-Nummer
 Level to put box in?,Level um Box hineinzutun?
+Level Locked,Level vergrendeld
 Level Unlocked,Level freigeschaltet
 Limit number of players that can be on any one team,"Begrenzen Sie die Anzahl der Spieler, die in einem Team sein können"
 "Limits the number of attempts to capture a flag.  Once the limit is reached, no further action can be taken on that flag.","Begrenzt die Anzahl der Versuche, eine Flagge zu erobern. Sobald das Limit erreicht ist, kann für dieses Flag keine weitere Aktion ausgeführt werden."
 Linux,Linux
 Lock,Sperren
+Locked,Gesperrt
 Locked by,Gesperrt von
 Login,Anmeldung
 Login Password,Passwort
@@ -365,7 +378,7 @@ MacOS,Mac OS
 Mainframe Console,Mainframe-Konsole
 Manage Black Market,Schwarzmarkt verwalten
 Manage Categories,Kategorien verwalten
-Managed,Beheerd
+Managed,Verwaltet
 Market Objects,Marktobjekte
 Max,Max
 Max Flag Attempts,Max. Flaggen-Versuche
@@ -414,7 +427,7 @@ No Completed Bribes,Keine abgeschlossenen Bestechungsgelder
 No flags captured yet.,Noch keine Flaggen erfasst.
 No flags on this box yet,Noch keine Flaggen auf dieser Box
 No further penalty thereafter.,Keine weitere Strafe danach.
-No Lock,Kein Schloss
+No Lock,Keine Sperrung
 No name,Kein Name
 No Pending Bribes,Keine ausstehenden Bestechungsgelder
 No sheep yet - check back later.,Noch keine Schafe - versuchen Sie es später noch einmal.
@@ -474,7 +487,7 @@ Players,Spieler
 Please do NOT enter your real bank account password.,Bitte geben Sie NICHT Ihr echtes Bankkonto-Passwort ein.
 points,Punkte
 Points,Punkte
-points,Punkte
+Points Required,Benötigte Punkte
 Previous Bribes,Vorherige Bestechungsgelder
 Price,Preis
 Privacy Policy,Datenschutz Richtlinie
@@ -485,7 +498,7 @@ Public,Öffentlichkeit
 Public Team Creation,Öffentliche Teambildung
 Public Teams,Öffentliche Teams
 Purchase,Kauf
-Purchase Unlock,Kauf Unlock
+Purchase Unlock,Entsperrung kaufen
 Purchased,Gekauft
 Rank By,Rang nach
 Regex Flag,Regex Flagge
@@ -495,7 +508,7 @@ Registration,Registrierung
 Registration Email,Registrierungs-E-Mail
 Registration Tokens,Registrierungs-Tokens
 Regular Expression,Regulären Ausdruck
-Remove,Verwijderen
+Remove,Entfernen
 Require Email,E-Mail anfordern
 Reset Actions,Aktionen zurücksetzen
 Reset Game,Spiel zurücksetzen
@@ -511,8 +524,9 @@ Reward,Belohnung
 Role,Rolle
 Rules of Engagement: Do not attack the game scoreboard platform.  Do not change the passwords of existing accounts in the network unless specified by a game objective.,"Einsatzregeln: Greife die Plattform des Spielanzeigers nicht an. Ändern Sie die Kennwörter bestehender Konten im Netzwerk nur, wenn dies von einem Spielziel festgelegt wurde."
 S.W.A.T,S.W.A.T.
-Save,sparen
+Save,Speichern
 Score,Ergebnis
+Score Points Earned,Verdiente Spielpunkte
 Scoreboard,Anzeigetafel
 Scoreboard Rank By,Anzeigetafel Rang nach
 Scoreboard Visibility,Sichtbarkeit der Anzeigetafel
@@ -525,7 +539,7 @@ Send,Senden
 Send a global notification to all players,Sende eine globale Benachrichtigung an alle Spieler
 Set Countdown Timer,Countdown-Timer einstellen
 Set the game countdown timer,Stellen Sie den Countdown-Timer für das Spiel ein
-Settings,die Einstellungen
+Settings,Einstellungen
 Share your team code to allow other players to join,Teilen Sie Ihren Teamcode mit anderen Spielern
 Shared Files,Geteilte Dateien
 Sheep,Schaf
@@ -587,6 +601,7 @@ Teams,Mannschaften
 Test Flag,Testflag
 Text Share,Text teilen
 The black market is open and you know a guy. Download a target's source code or S.W.A.T. other players by bribing the (in-game) police.,Der Schwarzmarkt ist offen und Sie kennen einen Mann. Laden Sie den Quellcode eines Ziels oder S.W.A.T. andere Spieler durch Bestechung der Polizei (im Spiel).
+The black market is open and you know a guy. The following items are available:,Der Schwarzmarkt ist offen und Sie kennen einen Mann. Folgende Artikel werden angeboten:
 The cost to take the hint.  Can be >= 0.,Die Kosten für den Hinweis. Kann> = 0 sein.
 The deduction is,Der Abzug ist
 "The only other possibility is that I messed up some of the code, and that doesn't seem very likely.","Die einzige andere Möglichkeit ist, dass ich einen Teil des Codes durcheinander gebracht habe, und das scheint nicht sehr wahrscheinlich zu sein."
@@ -629,10 +644,13 @@ Token Value,Token-Wert
 Tools,Werkzeuge
 Tools & Upgrades,Tools & Upgrades
 Total Cash Stolen,Bargeld gestohlen
+Total Users,Benutzer insgesamt
+Total Teams,Gesamtteams
+Total Boxes,Gesamtboxen
 Type,Art
-Unknown,unbekannte
+Unknown,Unbekannt
 Unlock,Freischalten
-Unlock Cost,Kosten freischalten
+Unlock Cost,Freischaltungskosten
 Unlock Level,Level freischalten
 Unlocks,Entsperrt
 Unlocks after,Entsperrt nach
@@ -684,14 +702,14 @@ You do not have access to this level yet.,Sie haben noch keinen Zugriff auf dies
 You do not own this upgrade.,Sie besitzen dieses Upgrade nicht.
 You have not submitted any bribes yet.,Sie haben noch keine Bestechungsgelder eingereicht.
 "Your email, visible to game administrators.","Deine E-Mail, sichtbar für Spieladministratoren."
-"Your handle must be 3-16 alpha-numeric characters.  Underscore, dash, and dots allowed.","Ihr Handle muss aus 3 bis 16 alphanumerischen Zeichen bestehen. Unterstreichen, Bindestrich und Punkte sind zulässig."
-"Your name, visible to game administrators.  Your name can be 3-64 alpha-numeric characters","Dein Name, sichtbar für Spieladministratoren. Ihr Name kann aus 3-64 alphanumerischen Zeichen bestehen"
-"Password Reset",Wachtwoord reset
-"Forgot Password",Wachtwoord vergeten
-"Request Password Reset",Wachtwoord reset aanvragen
-"Update Email",E-mail bijwerken
-"Please check your email for account validation",Controleer uw e-mail voor accountvalidatie
-Validate Email,Email valideren
-"Enabling this feature will require validation of email before the user can access the game.  If this option is disabled, email will not be verified.","Het inschakelen van deze functie vereist validatie van e-mail voordat de gebruiker toegang heeft tot de game. Als deze optie is uitgeschakeld, wordt e-mail niet geverifieerd."
-Note: Mail settings must be defined.,Opmerking: e-mailinstellingen moeten zijn gedefinieerd.
-Validation,Validatie
+"Your handle must be 3-16 alphanumeric characters.  Underscore, dash, and dots allowed.","Ihr Handle muss aus 3 bis 16 alphanumerischen Zeichen bestehen. Unterstreichen, Bindestrich und Punkte sind zulässig."
+"Your name, visible to game administrators.  Your name can be 3-64 alphanumeric characters","Dein Name, sichtbar für Spieladministratoren. Ihr Name kann aus 3-64 alphanumerischen Zeichen bestehen"
+"Password Reset",Passwort zurücksetzen
+"Forgot Password",Passwort vergessen
+"Request Password Reset",Zurücksetzung des Passwortes beantragen
+"Update Email",E-Mail aktualisieren
+"Please check your email for account validation",Bitte bestätigen Sie ihre E-Mail Adresse
+Validate Email,E-Mail validieren
+"Enabling this feature will require validation of email before the user can access the game.  If this option is disabled, email will not be verified.","Bei Aktivierung dieses Features wird eine Email Validierung erforderlich bevor der Benutzer auf das Spiel zugreifen kann. Bei Deaktivierung ist keine Validierung nötig."
+Note: Mail settings must be defined.,Bemerkung: E-Mail Einstellung müssen definiert sein.
+Validation,Validierung

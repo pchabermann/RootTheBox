@@ -39,6 +39,7 @@ import json
 
 from models.Theme import Theme
 from models.User import User
+from models.Box import Box
 from libs.EventManager import EventManager
 from libs.ValidationError import ValidationError
 from libs.SecurityDecorators import authenticated
@@ -48,14 +49,11 @@ from .BaseHandlers import BaseHandler
 from tornado.options import options
 
 
-RECAPTCHA_URL = "https://www.google.com/recaptcha/api/siteverify"
-
-
 class HomeHandler(BaseHandler):
     """Allow for public view of user page if scoreboard set to public"""
 
     def get(self, *args, **kwargs):
-        """ Display the default user page """
+        """Display the default user page"""
         user = self.get_current_user()
         if user:
             admin = user.is_admin()
@@ -73,27 +71,50 @@ class HomeHandler(BaseHandler):
         if not user:
             self.redirect("/login")
             return
+        gamestate = self.application.settings["scoreboard_state"].get("teams")
+        try:
+            stats = self.memcached.stats().get("127.0.0.1")
+            activeconnections = int(stats.get("curr_connections"))
+        except:
+            activeconnections = None
         if uuid is None and user.is_admin():
             self.timer()
-            self.render("admin/home.html", user=user)
+            self.render(
+                "admin/home.html",
+                user=user,
+                boxcount=len(Box.all()),
+                teamcount=len(gamestate),
+                usercount=len(User.all_users()),
+                activeconnections=activeconnections,
+            )
         else:
             game_started = self.application.settings["game_started"] or user.is_admin()
+            rank = len(gamestate) + 1
+            for i, team in enumerate(gamestate):
+                if team == user.team.name:
+                    rank = i + 1
+                    break
             self.render(
-                "user/home.html", user=user, game_started=game_started, visitor=visitor
+                "user/home.html",
+                user=user,
+                game_started=game_started,
+                visitor=visitor,
+                rank=rank,
+                scoreboard_visible=options.scoreboard_visibility != "admins",
             )
 
 
 class SettingsHandler(BaseHandler):
-    """ Modify user controlled attributes """
+    """Modify user controlled attributes"""
 
     @authenticated
     def get(self, *args, **kwargs):
-        """ Display the user settings """
+        """Display the user settings"""
         self.render_page()
 
     @authenticated
     def post(self, *args, **kwargs):
-        """ Calls function based on parameter """
+        """Calls function based on parameter"""
         post_functions = {
             "user_avatar": self.post_avatar,
             "team_avatar": self.post_team_avatar,
@@ -109,7 +130,7 @@ class SettingsHandler(BaseHandler):
             self.render_page()
 
     def render_page(self, errors=[], success=[]):
-        """ Small wrap for self.render to cut down on lenghty params """
+        """Small wrap for self.render to cut down on lengthy params"""
         user = self.get_current_user()
         self.add_content_policy("script", "'unsafe-eval'")
         current_theme = Theme.by_id(self.session["theme_id"])
@@ -181,7 +202,7 @@ class SettingsHandler(BaseHandler):
             self.render_page(errors=["Please provide an image"])
 
     def post_theme(self, *args, **kwargs):
-        """ Change per-user theme """
+        """Change per-user theme"""
         if not options.allow_user_to_change_theme:
             self.render_page(errors=["Users are not allowed to change themes"])
             return
@@ -199,7 +220,7 @@ class SettingsHandler(BaseHandler):
             self.render_page(errors=["Theme does not exist."])
 
     def post_motto(self, *args, **kwargs):
-        """ Change team motto """
+        """Change team motto"""
         user = self.get_current_user()
         if not user.team:
             self.render_page(errors=["Not assigned to a team"])
@@ -210,7 +231,7 @@ class SettingsHandler(BaseHandler):
         self.render_page(success=["Successfully updated Motto."])
 
     def post_email(self, *args, **kwargs):
-        """ Change user email """
+        """Change user email"""
         user = self.get_current_user()
         user.email = self.get_argument("email", "")
         self.dbsession.add(user)
@@ -218,7 +239,7 @@ class SettingsHandler(BaseHandler):
         self.render_page(success=["Successfully updated email address."])
 
     def post_password(self, *args, **kwargs):
-        """ Called on POST request for password change """
+        """Called on POST request for password change"""
         self.set_password(
             self.get_current_user(),
             self.get_argument("old_password", ""),
@@ -227,7 +248,7 @@ class SettingsHandler(BaseHandler):
         )
 
     def set_password(self, user, old_password, new_password, new_password2):
-        """ Sets a users password """
+        """Sets a users password"""
         if user.validate_password(old_password):
             if new_password == new_password2:
                 if (
@@ -251,7 +272,7 @@ class SettingsHandler(BaseHandler):
             self.render_page(errors=["Invalid old password"])
 
     def post_bankpassword(self):
-        """ Update user's bank password """
+        """Update user's bank password"""
         old_bankpw = self.get_argument("old_bpassword", "")
         user = self.get_current_user()
         if user.validate_bank_password(old_bankpw):
@@ -279,7 +300,7 @@ class SettingsHandler(BaseHandler):
             )
 
     def verify_recaptcha(self):
-        """ Checks recaptcha """
+        """Checks recaptcha"""
         recaptcha_response = self.get_argument("g-recaptcha-response", None)
         if recaptcha_response:
             recaptcha_req_data = {
@@ -289,8 +310,8 @@ class SettingsHandler(BaseHandler):
             }
             try:
                 recaptcha_req_body = urlencode(recaptcha_req_data).encode("utf-8")
-                reqquest = urlrequest.Request(RECAPTCHA_URL, recaptcha_req_body)
-                response = urlrequest.urlopen(reqquest)
+                request = urlrequest.Request(self.RECAPTCHA_URL, recaptcha_req_body)
+                response = urlrequest.urlopen(request)
                 self.recaptcha_callback(response)
             except tornado.httpclient.HTTPError:
                 logging.exception("Recaptcha AsyncHTTP request threw an exception")
@@ -313,17 +334,17 @@ class SettingsHandler(BaseHandler):
 
 
 class LogoutHandler(BaseHandler):
-    """ Log user out of current session """
+    """Log user out of current session"""
 
     def get(self, *args, **kwargs):
-        """ Redirect """
+        """Redirect"""
         if self.session is not None:
             self.redirect("/user")
         else:
             self.redirect("/login")
 
     def post(self, *args, **kwargs):
-        """ Clears cookies and session data """
+        """Clears cookies and session data"""
         if self.session is not None:
             user = self.get_current_user()
             EventManager.instance().deauth(user)

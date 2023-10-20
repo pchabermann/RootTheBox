@@ -24,7 +24,7 @@ import xml.etree.cElementTree as ET
 
 from uuid import uuid4
 from sqlalchemy import Column
-from sqlalchemy.types import Unicode, String
+from sqlalchemy.types import Unicode, String, Boolean
 from sqlalchemy.orm import relationship, backref
 from libs.ValidationError import ValidationError
 from builtins import str
@@ -33,12 +33,13 @@ from models.BaseModels import DatabaseObject
 
 
 class Corporation(DatabaseObject):
-    """ Corporation definition """
+    """Corporation definition"""
 
     uuid = Column(String(36), unique=True, nullable=False, default=lambda: str(uuid4()))
 
     _name = Column(Unicode(32), unique=True, nullable=False)
     _description = Column(Unicode(512))
+    _locked = Column(Boolean, default=False, nullable=False)
 
     boxes = relationship(
         "Box",
@@ -48,7 +49,7 @@ class Corporation(DatabaseObject):
 
     @classmethod
     def all(cls):
-        """ Returns a list of all objects in the database """
+        """Returns a list of all objects in the database"""
         return dbsession.query(cls).all()
 
     @classmethod
@@ -57,17 +58,17 @@ class Corporation(DatabaseObject):
 
     @classmethod
     def by_id(cls, _id):
-        """ Returns a the object with id of _id """
+        """Returns a the object with id of _id"""
         return dbsession.query(cls).filter_by(id=_id).first()
 
     @classmethod
     def by_name(cls, name):
-        """ Returns a the object with name of name """
+        """Returns a the object with name of name"""
         return dbsession.query(cls).filter_by(_name=str(name)).first()
 
     @classmethod
     def by_uuid(cls, uuid):
-        """ Return an object based on uuid """
+        """Return an object based on uuid"""
         return dbsession.query(cls).filter_by(uuid=uuid).first()
 
     @property
@@ -92,8 +93,27 @@ class Corporation(DatabaseObject):
             raise ValidationError("Description cannot be greater than 512 characters")
         self._description = str(value)
 
+    @property
+    def locked(self):
+        """Determines if an admin has locked an corp."""
+        if self._locked == None:
+            return False
+        return self._locked
+
+    @locked.setter
+    def locked(self, value):
+        """Setter method for _lock"""
+        if value is None:
+            value = False
+        elif isinstance(value, int):
+            value = value == 1
+        elif isinstance(value, str):
+            value = value.lower() in ["true", "1"]
+        assert isinstance(value, bool)
+        self._locked = value
+
     def to_dict(self):
-        """ Returns editable data as a dictionary """
+        """Returns editable data as a dictionary"""
         return {
             "uuid": self.uuid,
             "name": self.name,
@@ -102,10 +122,11 @@ class Corporation(DatabaseObject):
         }
 
     def to_xml(self, parent):
-        """ Add to XML dom """
+        """Add to XML dom"""
         corp_elem = ET.SubElement(parent, "corporation")
         ET.SubElement(corp_elem, "name").text = self.name
         ET.SubElement(corp_elem, "description").text = self.description
+        ET.SubElement(corp_elem, "locked").text = str(self.locked)
         boxes_elem = ET.SubElement(corp_elem, "boxes")
         boxes_elem.set("count", "%s" % str(len(self.boxes)))
         for box in self.boxes:

@@ -52,7 +52,7 @@ from tornado.options import options
 
 class BaseHandler(RequestHandler):
 
-    """ User handlers extend this class """
+    """User handlers extend this class"""
 
     csp = {
         "default-src": set(["'self'"]),
@@ -72,10 +72,11 @@ class BaseHandler(RequestHandler):
     new_events = []
     io_loop = IOLoop.instance()
     event_manager = EventManager.instance()
-    config = options  # backward compatability
+    config = options  # backward compatibility
+    RECAPTCHA_URL = "https://www.google.com/recaptcha/api/siteverify"
 
     def initialize(self):
-        """ Setup sessions, etc """
+        """Setup sessions, etc"""
         self.add_content_policy("connect-src", self.config.origin)
         # We need this for a few things, and so far as I know it doesn't
         # present too much of a security risk - TODO: no longer require
@@ -83,7 +84,7 @@ class BaseHandler(RequestHandler):
         self.add_content_policy("style-src", "'unsafe-inline'")
 
     def get_current_user(self):
-        """ Get current user object from database """
+        """Get current user object from database"""
         if self.session is not None:
             try:
                 return User.by_uuid(self.session["user_uuid"])
@@ -94,15 +95,15 @@ class BaseHandler(RequestHandler):
         return None
 
     def start_session(self):
-        """ Starts a new session """
+        """Starts a new session"""
         self.session = self._create_session()
-        flags = {"expires": self.session.expires, "path": "/", "HttpOnly": True}
+        flags = {"expires": self.session.expires, "path": "/", "httponly": True}
         if self.config.ssl:
             flags["Secure"] = True
         self.set_secure_cookie("session_id", self.session.session_id, **flags)
 
     def add_content_policy(self, src, policy):
-        """ Add to the existing CSP header """
+        """Add to the existing CSP header"""
         if not src.endswith("-src"):
             src += "-src"
         if src in self.csp:
@@ -112,7 +113,7 @@ class BaseHandler(RequestHandler):
             raise ValueError("Invalid content source")
 
     def clear_content_policy(self, src):
-        """ Clear a content source in the existing CSP header """
+        """Clear a content source in the existing CSP header"""
         if not src.endswith("-src"):
             src += "-src"
         if src in self.csp:
@@ -122,7 +123,7 @@ class BaseHandler(RequestHandler):
             raise ValueError("Invalid content source")
 
     def _refresh_csp(self):
-        """ Rebuild the Content-Security-Policy header """
+        """Rebuild the Content-Security-Policy header"""
         _csp = []
         for src, policies in list(self.csp.items()):
             if len(policies):
@@ -133,13 +134,13 @@ class BaseHandler(RequestHandler):
 
     @property
     def memcached(self):
-        """ Connects to Memcached instance """
+        """Connects to Memcached instance"""
         if self._memcached is None:
             self._memcached = MemcachedConnect()
         return self._memcached
 
     def _create_session(self):
-        """ Creates a new session """
+        """Creates a new session"""
         kwargs = {"connection": self.memcached, "ip_address": self.request.remote_ip}
         new_session = MemcachedSession(**kwargs)
         new_session.save()
@@ -190,7 +191,7 @@ class BaseHandler(RequestHandler):
             )
 
     def write_error(self, status_code, **kwargs):
-        """ Write our custom error pages """
+        """Write our custom error pages"""
         trace = "".join(traceback.format_exception(*kwargs["exc_info"]))
         logging.error(
             "Request from %s resulted in an error code %d:\n%s"
@@ -210,31 +211,31 @@ class BaseHandler(RequestHandler):
                 super(BaseHandler, self).write_error(status_code, **kwargs)
 
     def get(self, *args, **kwargs):
-        """ Placeholder, incase child class does not impl this method """
+        """Placeholder, in case child class does not impl this method"""
         self.render("public/404.html")
 
     def post(self, *args, **kwargs):
-        """ Placeholder, incase child class does not impl this method """
+        """Placeholder, in case child class does not impl this method"""
         self.render("public/404.html")
 
     def put(self, *args, **kwargs):
-        """ Log odd behavior, this should never get legitimately called """
+        """Log odd behavior, this should never get legitimately called"""
         logging.warning("%s attempted to use PUT method" % self.request.remote_ip)
 
     def delete(self, *args, **kwargs):
-        """ Log odd behavior, this should never get legitimately called """
+        """Log odd behavior, this should never get legitimately called"""
         logging.warning("%s attempted to use DELETE method" % self.request.remote_ip)
 
     def head(self, *args, **kwargs):
-        """ Ignore it """
+        """Ignore it"""
         logging.warning("%s attempted to use HEAD method" % self.request.remote_ip)
 
     def options(self, *args, **kwargs):
-        """ Log odd behavior, this should never get legitimately called """
+        """Log odd behavior, this should never get legitimately called"""
         logging.warning("%s attempted to use OPTIONS method" % self.request.remote_ip)
 
     def on_finish(self, *args, **kwargs):
-        """ Called after a response is sent to the client """
+        """Called after a response is sent to the client"""
         self.dbsession.close()
 
     def timer(self):
@@ -251,23 +252,20 @@ class BaseHandler(RequestHandler):
         return timer
 
     def start_game(self):
-        """ Start the game and any related callbacks """
+        """Start the game and any related callbacks"""
         if not self.application.settings["game_started"]:
             logging.info("The game is about to begin, good hunting!")
             self.application.settings["game_started"] = True
-            self.application.settings["history_callback"].start()
             if self.config.use_bots:
                 self.application.settings["score_bots_callback"].start()
             # Fire game start webhook
             send_game_start_webhook()
 
     def stop_game(self):
-        """ Stop the game and all callbacks """
+        """Stop the game and all callbacks"""
         if self.application.settings["game_started"]:
             logging.info("The game is stopping ...")
             self.application.settings["game_started"] = False
-            if self.application.settings["history_callback"]._running:
-                self.application.settings["history_callback"].stop()
             if self.application.settings["score_bots_callback"]._running:
                 self.application.settings["score_bots_callback"].stop()
             # Fire game stop webhook
@@ -298,16 +296,16 @@ class BaseHandler(RequestHandler):
 
 class BaseWebSocketHandler(WebSocketHandler):
 
-    """ Handles websocket connections """
+    """Handles websocket connections"""
 
     _session = None
     _memcached = None
     io_loop = IOLoop.instance()
     manager = EventManager.instance()
-    config = options  # backward compatability
+    config = options  # backward compatibility
 
     def check_origin(self, origin):
-        """ Parses the request's origin header """
+        """Parses the request's origin header"""
         try:
             request_origin = urlparse(origin)
             origin = urlparse(self.config.origin)
@@ -321,7 +319,7 @@ class BaseWebSocketHandler(WebSocketHandler):
 
     @property
     def memcached(self):
-        """ Connects to Memcached instance """
+        """Connects to Memcached instance"""
         if self._memcached is None:
             self._memcached = MemcachedConnect()
         return self._memcached
@@ -352,7 +350,7 @@ class BaseWebSocketHandler(WebSocketHandler):
             return None
 
     def get_current_user(self):
-        """ Get current user object from database """
+        """Get current user object from database"""
         if self.session is not None:
             try:
                 return User.by_handle(self.session["handle"])

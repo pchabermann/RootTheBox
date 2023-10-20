@@ -24,7 +24,7 @@ import logging
 
 from tornado.options import options
 from sqlalchemy import event, create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.engine import Engine
 from contextlib import contextmanager
 from libs.DatabaseConnection import DatabaseConnection
@@ -38,7 +38,7 @@ if options.log_sql:
     sql_logger = logging.getLogger("sqlalchemy.engine")
     sql_logger.setLevel(logging.INFO)
 
-    # This benchmarks the amount of time spent quering the database
+    # This benchmarks the amount of time spent querying the database
     @event.listens_for(Engine, "before_cursor_execute")
     def before_cursor_execute(
         conn, cursor, statement, parameters, context, executemany
@@ -73,7 +73,8 @@ else:
 
 ### Setup the database session
 engine = create_engine(str(db_connection), pool_pre_ping=True)
-_Session = sessionmaker(bind=engine)
+session_maker = sessionmaker(bind=engine)
+_Session = scoped_session(session_maker)
 StartSession = lambda: _Session(autoflush=True)
 
 dbsession = StartSession()
@@ -99,7 +100,7 @@ if options.rocketchat_admin:
 
 @contextmanager
 def cxt_dbsession():
-    """ Provide a transactional scope around a series of operations. """
+    """Provide a transactional scope around a series of operations."""
     session = StartSession()
     try:
         yield session
@@ -128,8 +129,6 @@ from models.Theme import Theme, ThemeFile
 from models.RegistrationToken import RegistrationToken
 from models.MarketItem import MarketItem
 from models.IpAddress import IpAddress
-from models.Snapshot import Snapshot
-from models.SnapshotTeam import SnapshotTeam
 from models.SourceCode import SourceCode
 from models.Swat import Swat
 from models.Hint import Hint

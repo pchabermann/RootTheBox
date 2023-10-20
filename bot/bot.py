@@ -134,7 +134,7 @@ logger = logging.getLogger()
 
 class WebSocketException(Exception):
     """
-    websocket exeception class.
+    websocket exception class.
     """
 
     pass
@@ -335,7 +335,7 @@ class ABNF(object):
         OPCODE_PONG: "pong",
     }
 
-    # data length threashold.
+    # data length threshold.
     LENGTH_7 = 0x7D
     LENGTH_16 = 1 << 16
     LENGTH_63 = 1 << 63
@@ -363,7 +363,7 @@ class ABNF(object):
 
         data: data to send. This is string value(byte array).
             if opcode is OPCODE_TEXT and this value is uniocde,
-            data value is conveted into unicode string, automatically.
+            data value is converted into unicode string, automatically.
 
         opcode: operation code. please see OPCODE_XXX.
         """
@@ -432,7 +432,7 @@ class WebSocket(object):
       The WebSocket protocol draft-hixie-thewebsocketprotocol-76
       http://tools.ietf.org/html/draft-hixie-thewebsocketprotocol-76
 
-    We can connect to the websocket server and send/recieve data.
+    We can connect to the websocket server and send/receive data.
     The following example is a echo client.
 
     >>> import websocket
@@ -451,7 +451,7 @@ class WebSocket(object):
 
     def __init__(self, get_mask_key=None, sockopt=()):
         """
-        Initalize WebSocket object.
+        Initialize WebSocket object.
         """
         self.connected = False
         self.io_sock = self.sock = socket.socket()
@@ -809,24 +809,24 @@ class WebSocketApp(object):
         sockopt=(),
     ):
         """
-        url: websocket url.
-        header: custom header for websocket handshake.
-        on_open: callable object which is called at opening websocket.
-          this function has one argument. The arugment is this class object.
-        on_message: callbale object which is called when received data.
-         on_message has 2 arguments.
-         The 1st arugment is this class object.
-         The passing 2nd arugment is utf-8 string which we get from the server.
-       on_error: callable object which is called when we get error.
-         on_error has 2 arguments.
-         The 1st arugment is this class object.
-         The passing 2nd arugment is exception object.
-       on_close: callable object which is called when closed the connection.
-         this function has one argument. The arugment is this class object.
-       keep_running: a boolean flag indicating whether the app's main loop should
-         keep running, defaults to True
-       get_mask_key: a callable to produce new mask keys, see the WebSocket.set_mask_key's
-         docstring for more information
+         url: websocket url.
+         header: custom header for websocket handshake.
+         on_open: callable object which is called at opening websocket.
+           this function has one argument. The argument is this class object.
+         on_message: callbale object which is called when received data.
+          on_message has 2 arguments.
+          The 1st argument is this class object.
+          The passing 2nd argument is utf-8 string which we get from the server.
+        on_error: callable object which is called when we get error.
+          on_error has 2 arguments.
+          The 1st argument is this class object.
+          The passing 2nd argument is exception object.
+        on_close: callable object which is called when closed the connection.
+          this function has one argument. The argument is this class object.
+        keep_running: a boolean flag indicating whether the app's main loop should
+          keep running, defaults to True
+        get_mask_key: a callable to produce new mask keys, see the WebSocket.set_mask_key's
+          docstring for more information
         """
         self.url = url
         self.header = header
@@ -930,7 +930,7 @@ def send_interrogation_response(ws, response):
 
 
 def recv_ping(ws, response, verbose=False):
-    """ Print that we just got a ping from c&c """
+    """Print that we just got a ping from c&c"""
     sys.stdout.write(chr(27) + "[2K" + "\r")
     sys.stdout.write(
         INFO + " %s  Ping  : Received a ping from command & control" % current_time()
@@ -953,7 +953,7 @@ def on_open(ws):
 
 
 def on_message(ws, message):
-    """ Parse message and call a function """
+    """Parse message and call a function"""
     try:
         response = json.loads(message)
         if "opcode" not in response:
@@ -983,7 +983,7 @@ def get_default_garbage():
 
 
 def main(domain, port, user, garbage_path, secure, verbose):
-    """ Main() """
+    """Main()"""
     garbage_cfg = ConfigParser.SafeConfigParser()
     if garbage_path is None:
         garbage_path = get_default_garbage()
@@ -1041,7 +1041,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--garbage",
         "-g",
-        help="path to garbage file (defult: /root/garbage or C:\\garbage)",
+        help="path to garbage file (default: /root/garbage or C:\\garbage)",
         dest="garbage",
     )
     parser.add_argument(

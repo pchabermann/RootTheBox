@@ -24,7 +24,7 @@ import xml.etree.cElementTree as ET
 
 from uuid import uuid4
 from sqlalchemy import Column, ForeignKey, asc
-from sqlalchemy.types import Unicode, Integer, String
+from sqlalchemy.types import Unicode, Integer, String, Boolean
 from sqlalchemy.orm import relationship, backref
 from libs.ValidationError import ValidationError
 from models import dbsession
@@ -35,17 +35,18 @@ from models.Relationships import team_to_game_level
 
 class GameLevel(DatabaseObject):
 
-    """ Game Level definition """
+    """Game Level definition"""
 
     uuid = Column(String(36), unique=True, nullable=False, default=lambda: str(uuid4()))
 
     next_level_id = Column(Integer, ForeignKey("game_level.id"))
     _number = Column(Integer, unique=True, nullable=False)
     _buyout = Column(Integer, nullable=False)
-    _type = Column(Unicode(16), nullable=False, default=u"none")
+    _type = Column(Unicode(16), nullable=False, default=str("none"))
     _reward = Column(Integer, nullable=False, default=0)
     _name = Column(Unicode(32), nullable=True)
     _description = Column(Unicode(512))
+    _locked = Column(Boolean, default=False, nullable=False)
 
     boxes = relationship(
         "Box",
@@ -62,7 +63,7 @@ class GameLevel(DatabaseObject):
 
     @classmethod
     def all(cls):
-        """ Returns a list of all objects in the database """
+        """Returns a list of all objects in the database"""
         return dbsession.query(cls).order_by(asc(cls._number)).all()
 
     @classmethod
@@ -71,22 +72,22 @@ class GameLevel(DatabaseObject):
 
     @classmethod
     def by_id(cls, _id):
-        """ Returns a the object with id of _id """
+        """Returns a the object with id of _id"""
         return dbsession.query(cls).filter_by(id=_id).first()
 
     @classmethod
     def by_uuid(cls, _uuid):
-        """ Return and object based on a _uuid """
+        """Return and object based on a _uuid"""
         return dbsession.query(cls).filter_by(uuid=_uuid).first()
 
     @classmethod
     def by_number(cls, number):
-        """ Returns a the object with number of number """
+        """Returns a the object with number of number"""
         return dbsession.query(cls).filter_by(_number=abs(int(number))).first()
 
     @classmethod
     def last_level(cls, number):
-        """ Returns the prior level """
+        """Returns the prior level"""
         return dbsession.query(cls).filter_by(next_level_id=int(number)).first()
 
     @property
@@ -168,11 +169,35 @@ class GameLevel(DatabaseObject):
 
     @property
     def flags(self):
-        """ Return all flags for the level """
+        """Return all flags for the level"""
         _flags = []
         for box in self.boxes:
-            _flags += box.flags
+            _flags += sorted(box.flags)
         return _flags
+
+    @property
+    def locked(self):
+        """Determines if an admin has locked an level."""
+        if self._locked == None:
+            return False
+        return self._locked
+
+    @locked.setter
+    def locked(self, value):
+        """Setter method for _lock"""
+        if value is None:
+            value = False
+        elif isinstance(value, int):
+            value = value == 1
+        elif isinstance(value, str):
+            value = value.lower() in ["true", "1"]
+        assert isinstance(value, bool)
+        self._locked = value
+
+    def unlocked_boxes(self):
+        if self._locked:
+            return []
+        return [box for box in self.boxes if not box.locked]
 
     def to_xml(self, parent):
         level_elem = ET.SubElement(parent, "gamelevel")
@@ -182,9 +207,10 @@ class GameLevel(DatabaseObject):
         ET.SubElement(level_elem, "reward").text = str(self._reward)
         ET.SubElement(level_elem, "name").text = str(self._name)
         ET.SubElement(level_elem, "description").text = str(self._description)
+        ET.SubElement(level_elem, "locked").text = str(self.locked)
 
     def to_dict(self):
-        """ Return public data as dict """
+        """Return public data as dict"""
         last = GameLevel.last_level(self.id)
         if last:
             last_level = last.number
@@ -202,7 +228,7 @@ class GameLevel(DatabaseObject):
         }
 
     def __next__(self):
-        """ Return the next level, or None """
+        """Return the next level, or None"""
         if self.next_level_id is not None:
             return self.by_id(self.next_level_id)
         else:

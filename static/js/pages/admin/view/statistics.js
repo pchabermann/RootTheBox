@@ -8,7 +8,7 @@ function getStatDetails(obj, uuid) {
                 $("#flag_value").text(value[0]["price"]);
                 $("#details_flag_name").text(value[0].name);
                 $("#details_flag_description").text(value[0].description);
-                $("#details_flag_token").text(value[0].token);
+                $("#details_flag_token").text(htmlEncode(value[0].token));
                 $("#count_attempts").text(response["attempts"].length);
                 $("#count_captures").text(response["captures"].length);
                 $("#count_hints").text(response["hints"].length);
@@ -18,9 +18,11 @@ function getStatDetails(obj, uuid) {
                     var table = "";
                     if (value.length > 0) {
                         for (i=0; i < value.length; i++) {
-                            table += "<tr><td class='shortcolumn statcolumn'>" + value[i].name + "</td>";
-                            if (value[i].token !== undefined) {
-                                table += "<td class='descriptioncol' style='text-align: center;'>" + value[i].token + "</td>";
+                            let tkn = $('<div>').text(htmlEncode(value[i].token));
+                            let nm = $('<div>').text(value[i].name);
+                            table += "<tr><td class='shortcolumn statcolumn'>" + nm.text() + "</td>";
+                            if (htmlEncode(value[i].token) !== undefined) {
+                                table += "<td class='descriptioncol' style='text-align: center;'>" + tkn.text() + "</td>";
                             }
                             if (value[i].price !== undefined) {
                                 table += "<td class='shortcolumn statcolumn'>" + value[i].price + "</td>";
@@ -30,8 +32,8 @@ function getStatDetails(obj, uuid) {
                             }
                             if (key == "attempts") {
                                 table += "<td class='shortcolum statcolumn'><a class='acceptbtn btn btn-mini' href='#' ";
-                                table += "data-flag-uuid='" + value[i].flag + "' data-team-uuid='" + value[i].team + "' ";
-                                table += "data-team-name='" + value[i].name + "' data-flag-token='" + value[i].token + "' ";
+                                table += "data-flag-uuid='" + value[i].flag + "' data-team-uuid='" + value[i].team + "' data-user-uuid='" + value[i].user + "' ";
+                                table += "data-team-name='" + nm.text() + "' data-flag-token='" + tkn.text() + "' ";
                                 table += "data-flag-penalty='" + value[i].penalty + "' data-flag-type='" + value[i].type + "'>";
                                 table += "Accept Answer</a></td>";
                             }
@@ -51,17 +53,12 @@ function getStatDetails(obj, uuid) {
                     resetAnswerModal();
                     $("#answer-team").text($(e.target).data("team-name"));
                     var token = $(e.target).data("flag-token");
-                    var penalty = $(e.target).data("flag-penalty").replace("-$", "");
                     var flagtype = $(e.target).data("flag-type");
                     $("#answer-flag-uuid").val($(e.target).data("flag-uuid"));
                     $("#answer-team-uuid").val($(e.target).data("team-uuid"));
+                    $("#answer-user-uuid").val($(e.target).data("user-uuid"));
                     $("#answer-token").val(token);
                     $("#answer-flag").text(token);
-                    if (penalty === "0") {
-                        $("#pointrestore").hide();
-                    } else {
-                        $("#answer-penalty").text(penalty);
-                    }
                     if (flagtype !== "static" && flagtype !== "regex") {
                         $("#acceptanswer").prop("checked", false);
                         $("#acceptanswer").prop("disabled", true);

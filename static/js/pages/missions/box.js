@@ -5,16 +5,25 @@ $(document).ready(function() {
     /* Markdown */
     $(".markdown").each(function() {
         var parsed = reader.parse($(this).text());
-        $(this).html(writer.render(parsed).trim());
+        var formatted = writer.render(parsed).trim();
+        $(this).html(formatted.replaceAll("<a href=", '<a target="_blank" href='));
     });
 
     /* Flags */
+    $("#capture-file-flag-modal").on('shown.bs.modal', function () {
+        $("#flag-file").focus()
+    });
+
     $("a[id^=capture-file-flag-button]").click(function() {
         $("#capture-file-flag-uuid").val($(this).data("uuid"));
     });
 
     $("#capture-file-flag-submit").click(function() {
         $("#capture-file-flag-form").submit();
+    });
+
+    $("#capture-text-flag-modal").on('shown.bs.modal', function () {
+        $("#flag-token").focus()
     });
 
     $("a[id^=capture-text-flag-button]").click(function() {

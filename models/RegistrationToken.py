@@ -20,40 +20,46 @@ Created on Sep 22, 2012
 """
 
 
+import binascii
 from os import urandom
 from sqlalchemy import Column
 from sqlalchemy.types import String, Boolean
 from models import dbsession
 from models.BaseModels import DatabaseObject
-from libs.StringCoding import encode
+from libs.StringCoding import encode, decode
 from builtins import str
 
 
-gen_token = lambda: encode(urandom(3), "hex")
+gen_token = lambda: binascii.hexlify(urandom(3))
 
 
 class RegistrationToken(DatabaseObject):
-    """ Registration token definition """
+    """Registration token definition"""
 
     value = Column(String(6), unique=True, nullable=False, default=gen_token)
     used = Column(Boolean, nullable=False, default=False)
 
     @classmethod
     def all(cls):
-        """ Returns a list of all objects in the database """
+        """Returns a list of all objects in the database"""
         return dbsession.query(cls).all()
 
     @classmethod
     def by_id(cls, _id):
-        """ Returns a the object with id of _id """
+        """Returns a the object with id of _id"""
         return dbsession.query(cls).filter_by(id=_id).first()
 
     @classmethod
     def count(cls):
-        """ Returns a list of all objects in the database """
+        """Returns a list of all objects in the database"""
         return dbsession.query(cls).count()
 
     @classmethod
-    def by_value(cls, value):
-        """ Returns a the object with value of value """
-        return dbsession.query(cls).filter_by(value=encode(value)).first()
+    def by_value(cls, _value):
+        """Returns a the object with value of value"""
+        return dbsession.query(cls).filter_by(value=encode(_value)).first()
+    
+    def getvalue(self):
+        return  decode(self.value)
+    
+

@@ -28,9 +28,18 @@ any authentication) with the exception of error handlers and the scoreboard
 import logging
 import re
 import smtplib
-import secrets
+import random
 import string
+import json
 
+try:
+    from urllib.parse import urlencode
+except ImportError:
+    from urllib import urlencode
+try:
+    import urllib.request as urlrequest
+except ImportError:
+    import urllib2 as urlrequest
 from os import urandom
 from netaddr import IPAddress
 from libs.Identicon import identicon
@@ -38,6 +47,8 @@ from libs.SecurityDecorators import blacklist_ips
 from libs.ValidationError import ValidationError
 from libs.XSSImageCheck import filter_avatars
 from libs.StringCoding import encode, decode
+from libs.EmailHelpers import email_rfc2822_compliance
+from libs.WebhookHelpers import send_user_validated_webhook
 from base64 import urlsafe_b64encode, urlsafe_b64decode, b64encode
 from builtins import str
 from models import azuread_app
@@ -59,7 +70,7 @@ from msal import ConfidentialClientApplication
 
 class HomePageHandler(BaseHandler):
     def get(self, *args, **kwargs):
-        """ Renders the main page """
+        """Renders the main page"""
         if self.session is not None:
             self.redirect("/user")
         else:
@@ -68,7 +79,7 @@ class HomePageHandler(BaseHandler):
 
 class CodeFlowHandler(BaseHandler):
 
-    """ Handles the OIDC code flow response, when using Azure AD authentication """
+    """Handles the OIDC code flow response, when using Azure AD authentication"""
 
     azuread_app = azuread_app
 
@@ -162,7 +173,7 @@ class CodeFlowHandler(BaseHandler):
         user.handle = claims["preferred_username"].split("@")[0]
         # Generate a long random password that the user will never know or use.
         user.password = "".join(
-            secrets.choice(string.ascii_letters + string.digits + string.punctuation)
+            random.choice(string.ascii_letters + string.digits + string.punctuation)
             for i in range(30)
         )
         user.bank_password = ""
@@ -194,12 +205,12 @@ class CodeFlowHandler(BaseHandler):
 
 class LoginHandler(BaseHandler):
 
-    """ Takes care of the login process """
+    """Takes care of the login process"""
 
     azuread_app = azuread_app
 
     def get(self, *args, **kwargs):
-        """ Display the login page """
+        """Display the login page"""
         if self.session is not None:
             self.redirect("/user")
         else:
@@ -212,13 +223,19 @@ class LoginHandler(BaseHandler):
 
     @blacklist_ips
     def post(self, *args, **kwargs):
-        """ Checks submitted username and password """
+        """Checks submitted username and password"""
         user = User.by_handle(self.get_argument("account", ""))
         password_attempt = self.get_argument("password", "")
         if user is None:
             user = User.by_email(self.get_argument("account", ""))
         if user is not None:
-            if user.validate_password(password_attempt):
+            if self.config.use_recaptcha and self.verify_recaptcha() is False:
+                self.render(
+                    "public/login.html",
+                    info=None,
+                    errors=["Invalid reCAPTCHA, try again"],
+                )
+            elif user.validate_password(password_attempt):
                 self.valid_login(user)
             else:
                 self.failed_login()
@@ -226,6 +243,25 @@ class LoginHandler(BaseHandler):
             if password_attempt is not None:
                 PBKDF2.crypt(password_attempt, "BurnTheHashTime")
             self.failed_login()
+
+    def verify_recaptcha(self):
+        """Checks recaptcha"""
+        recaptcha_response = self.get_argument("g-recaptcha-response", None)
+        if recaptcha_response:
+            recaptcha_req_data = {
+                "secret": self.config.recaptcha_secret_key,
+                "remoteip": self.request.remote_ip,
+                "response": recaptcha_response,
+            }
+
+            recaptcha_req_body = urlencode(recaptcha_req_data).encode("utf-8")
+            request = urlrequest.Request(self.RECAPTCHA_URL, recaptcha_req_body)
+            response = urlrequest.urlopen(request)
+            if response:
+                result = json.loads(response.read())
+                if result["success"]:
+                    return True
+        return False
 
     def build_auth_code_flow(self):
         codeflow = azuread_app.initiate_auth_code_flow(
@@ -243,7 +279,7 @@ class LoginHandler(BaseHandler):
             self.render(
                 "public/login.html",
                 info=[
-                    "Succesfull credentials, but administration is restriceted via IP.  See 'admin_ips' in configuration."
+                    "Successful credentials, but administration is restriceted via IP.  See 'admin_ips' in configuration."
                 ],
                 errors=None,
             )
@@ -278,7 +314,7 @@ class LoginHandler(BaseHandler):
                 self.redirect("/user")
 
     def successful_login(self, user):
-        """ Called when a user successfully logs in """
+        """Called when a user successfully logs in"""
         logging.info(
             "Successful login: %s from %s" % (user.handle, self.request.remote_ip)
         )
@@ -302,7 +338,7 @@ class LoginHandler(BaseHandler):
         self.session.save()
 
     def failed_login(self):
-        """ Called if username/password is invalid """
+        """Called if username/password is invalid"""
         ip = self.request.remote_ip
         logging.info("*** Failed login attempt from: %s" % ip)
         failed_logins = self.application.settings["failed_logins"]
@@ -330,12 +366,34 @@ class LoginHandler(BaseHandler):
         )
 
 
-class RegistrationHandler(BaseHandler):
+class StatusHandler(BaseHandler):
 
-    """ Registration Code """
+    """Status"""
 
     def get(self, *args, **kwargs):
-        """ Renders the registration page """
+        teamcount = len(Team.all())
+        status = {
+            "rtb_version": self.application.settings["version"],
+            "game_version": options.game_version,
+            "name": options.game_name,
+            "game_started": self.application.settings["game_started"],
+            "suspend_registration": self.application.settings["suspend_registration"],
+        }
+        if options.teams:
+            usercount = len(User.all_users())
+            status["team_count"] = teamcount
+            status["player_count"] = usercount
+        else:
+            status["player_count"] = teamcount
+        return self.write(json.dumps(status))
+
+
+class RegistrationHandler(BaseHandler):
+
+    """Registration Code"""
+
+    def get(self, *args, **kwargs):
+        """Renders the registration page"""
         if self.session is not None:
             self.redirect("/user")
         else:
@@ -346,18 +404,17 @@ class RegistrationHandler(BaseHandler):
             )
 
     def post(self, *args, **kwargs):
-        """ Attempts to create an account, with shitty form validation """
+        """Attempts to create an account, with shitty form validation"""
         try:
             if self.application.settings["suspend_registration"]:
                 self.render("public/registration.html", errors=None, suspend=True)
             else:
+                self.form_validation()
                 if self.config.restrict_registration:
                     self.check_regtoken()
                 user = self.create_user()
                 validate = options.require_email and options.validate_email
-                self.render(
-                    "public/successful_reg.html", account=user.handle, validate=validate
-                )
+                self.render("public/successful_reg.html", user=user, validate=validate)
         except ValidationError as error:
             self.render(
                 "public/registration.html",
@@ -376,6 +433,7 @@ class RegistrationHandler(BaseHandler):
             raise ValidationError("Invalid registration token")
 
     def form_validation(self):
+        unicodewd = "ªµºÀ-ÖØ-öø-ˁˆ-ˑˠ-ˤˬˮͰ-ʹͶͷͺ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-Ֆՙՠ-ֈא-תׯ-ײؠ-يٮٯٱ-ۓەۥۦۮۯۺ-ۼۿܐܒ-ܯݍ-ޥޱߊ-ߪߴߵߺࠀ-ࠕࠚࠤࠨࡀ-ࡘࡠ-ࡪࡰ-ࢇࢉ-ࢎࢠ-ࣉऄ-हऽॐक़-ॡॱ-ঀঅ-ঌএঐও-নপ-রলশ-হঽৎড়ঢ়য়-ৡৰৱৼਅ-ਊਏਐਓ-ਨਪ-ਰਲਲ਼ਵਸ਼ਸਹਖ਼-ੜਫ਼ੲ-ੴઅ-ઍએ-ઑઓ-નપ-રલળવ-હઽૐૠૡૹଅ-ଌଏଐଓ-ନପ-ରଲଳଵ-ହଽଡ଼ଢ଼ୟ-ୡୱஃஅ-ஊஎ-ஐஒ-கஙசஜஞடணதந-பம-ஹௐఅ-ఌఎ-ఐఒ-నప-హఽౘ-ౚౝౠౡಀಅ-ಌಎ-ಐಒ-ನಪ-ಳವ-ಹಽೝೞೠೡೱೲഄ-ഌഎ-ഐഒ-ഺഽൎൔ-ൖൟ-ൡൺ-ൿඅ-ඖක-නඳ-රලව-ෆก-ะาำเ-ๆກຂຄຆ-ຊຌ-ຣລວ-ະາຳຽເ-ໄໆໜ-ໟༀཀ-ཇཉ-ཬྈ-ྌက-ဪဿၐ-ၕၚ-ၝၡၥၦၮ-ၰၵ-ႁႎႠ-ჅჇჍა-ჺჼ-ቈቊ-ቍቐ-ቖቘቚ-ቝበ-ኈኊ-ኍነ-ኰኲ-ኵኸ-ኾዀዂ-ዅወ-ዖዘ-ጐጒ-ጕጘ-ፚᎀ-ᎏᎠ-Ᏽᏸ-ᏽᐁ-ᙬᙯ-ᙿᚁ-ᚚᚠ-ᛪᛱ-ᛸᜀ-ᜑᜟ-ᜱᝀ-ᝑᝠ-ᝬᝮ-ᝰក-ឳៗៜᠠ-ᡸᢀ-ᢄᢇ-ᢨᢪᢰ-ᣵᤀ-ᤞᥐ-ᥭᥰ-ᥴᦀ-ᦫᦰ-ᧉᨀ-ᨖᨠ-ᩔᪧᬅ-ᬳᭅ-ᭌᮃ-ᮠᮮᮯᮺ-ᯥᰀ-ᰣᱍ-ᱏᱚ-ᱽᲀ-ᲈᲐ-ᲺᲽ-Ჿᳩ-ᳬᳮ-ᳳᳵᳶᳺᴀ-ᶿḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼⁱⁿₐ-ₜℂℇℊ-ℓℕℙ-ℝℤΩℨK-ℭℯ-ℹℼ-ℿⅅ-ⅉⅎↃↄⰀ-ⳤⳫ-ⳮⳲⳳⴀ-ⴥⴧⴭⴰ-ⵧⵯⶀ-ⶖⶠ-ⶦⶨ-ⶮⶰ-ⶶⶸ-ⶾⷀ-ⷆⷈ-ⷎⷐ-ⷖⷘ-ⷞⸯ々〆〱-〵〻〼ぁ-ゖゝ-ゟァ-ヺー-ヿㄅ-ㄯㄱ-ㆎㆠ-ㆿㇰ-ㇿ㐀-䶿一-ꒌꓐ-ꓽꔀ-ꘌꘐ-ꘟꘪꘫꙀ-ꙮꙿ-ꚝꚠ-ꛥꜗ-ꜟꜢ-ꞈꞋ-ꟊꟐꟑꟓꟕ-ꟙꟲ-ꠁꠃ-ꠅꠇ-ꠊꠌ-ꠢꡀ-ꡳꢂ-ꢳꣲ-ꣷꣻꣽꣾꤊ-ꤥꤰ-ꥆꥠ-ꥼꦄ-ꦲꧏꧠ-ꧤꧦ-ꧯꧺ-ꧾꨀ-ꨨꩀ-ꩂꩄ-ꩋꩠ-ꩶꩺꩾ-ꪯꪱꪵꪶꪹ-ꪽꫀꫂꫛ-ꫝꫠ-ꫪꫲ-ꫴꬁ-ꬆꬉ-ꬎꬑ-ꬖꬠ-ꬦꬨ-ꬮꬰ-ꭚꭜ-ꭩꭰ-ꯢ가-힣ힰ-ퟆퟋ-ퟻ豈-舘並-龎ﬀ-ﬆﬓ-ﬗיִײַ-ﬨשׁ-זּטּ-לּמּנּסּףּפּצּ-ﮱﯓ-ﴽﵐ-ﶏﶒ-ﷇﷰ-ﷻﹰ-ﹴﹶ-ﻼＡ-Ｚａ-ｚｦ-ﾾￂ-ￇￊ-ￏￒ-ￗￚ-ￜ"
         if (
             bool(re.match(r"^[a-zA-Z0-9_\-\.]{3,16}$", self.get_argument("handle", "")))
             is False
@@ -398,11 +456,37 @@ class RegistrationHandler(BaseHandler):
         if (
             self.get_argument("playername", None)
             and bool(
-                re.match(r"^[a-zA-Z0-9 ]{3,64}$", self.get_argument("playername", ""))
+                re.match(
+                    r"^[0-9A-Za-z %s]{3,64}$" % unicodewd,
+                    self.get_argument("playername", ""),
+                    re.UNICODE,
+                )
             )
             is False
         ):
             raise ValidationError("Invalid playername format")
+        if (
+            self.get_argument("team-name", None)
+            and bool(
+                re.match(
+                    r"^[0-9A-Za-z _\-\.]{3,24}$", self.get_argument("team-name", "")
+                )
+            )
+            is False
+        ):
+            raise ValidationError("Invalid Team Name format")
+        if (
+            self.get_argument("motto", None)
+            and bool(
+                re.match(
+                    r"^[0-9A-Za-z _\-\.%s]{,32}$" % unicodewd,
+                    self.get_argument("motto", ""),
+                    re.UNICODE,
+                )
+            )
+            is False
+        ):
+            raise ValidationError("Invalid Team Motto format")
         if (
             User.by_handle(self.get_argument("handle", ""), case_sensitive=False)
             is not None
@@ -415,10 +499,30 @@ class RegistrationHandler(BaseHandler):
             raise ValidationError("This email address is already registered")
         if self.get_argument("pass1", "") != self.get_argument("pass2", ""):
             raise ValidationError("Passwords do not match")
+        if self.config.use_recaptcha and self.verify_recaptcha() is False:
+            raise ValidationError("Invalid reCAPTCHA")
+
+    def verify_recaptcha(self):
+        """Checks recaptcha"""
+        recaptcha_response = self.get_argument("g-recaptcha-response", None)
+        if recaptcha_response:
+            recaptcha_req_data = {
+                "secret": self.config.recaptcha_secret_key,
+                "remoteip": self.request.remote_ip,
+                "response": recaptcha_response,
+            }
+
+            recaptcha_req_body = urlencode(recaptcha_req_data).encode("utf-8")
+            request = urlrequest.Request(self.RECAPTCHA_URL, recaptcha_req_body)
+            response = urlrequest.urlopen(request)
+            if response:
+                result = json.loads(response.read())
+                if result["success"]:
+                    return True
+        return False
 
     def create_user(self):
-        """ Add user to the database """
-        self.form_validation()
+        """Add user to the database"""
         user = User()
         user.handle = self.get_argument("handle", "")
         user.password = self.get_argument("pass1", "")
@@ -462,6 +566,7 @@ class RegistrationHandler(BaseHandler):
         else:
             self.event_manager.user_joined_team(user)
 
+        self.event_manager.push_score_update()
         # Chat
         if self.chatsession:
             self.chatsession.create_user(user, self.get_argument("pass1", ""))
@@ -469,7 +574,7 @@ class RegistrationHandler(BaseHandler):
         return user
 
     def get_team(self):
-        """ Create a team object, or pull the existing one """
+        """Create a team object, or pull the existing one"""
         code = self.get_argument("team-code", "")
         if len(code) > 0:
             team = Team.by_code(code)
@@ -481,12 +586,15 @@ class RegistrationHandler(BaseHandler):
         return self.create_team()
 
     def create_team(self):
-        """ Create a new team """
+        """Create a new team"""
         if not self.config.teams:
             team = Team.by_name(self.get_argument("handle", ""))
             if team is None:
                 team = Team()
-                team.name = self.get_argument("handle", "")
+                if self.config.player_use_handle:
+                    team.name = self.get_argument("handle", "")
+                else:
+                    team.name = self.get_argument("playername", "")
             else:
                 logging.info(
                     "Team %s already exists - Player Mode: reset team." % team.name
@@ -500,9 +608,9 @@ class RegistrationHandler(BaseHandler):
             team.motto = self.get_argument("motto", "")
             team._avatar = identicon(team.name, 6)
             if self.config.banking:
-                team.money = self.config.starting_team_money
+                team.set_score("start", self.config.starting_team_money)
             else:
-                team.money = 0
+                team.set_score("start", 0)
             levels = GameLevel.all()
             for level in levels:
                 if level.type == "none":
@@ -521,7 +629,9 @@ class RegistrationHandler(BaseHandler):
             if len(filter_avatars("team")) == 0:
                 team._avatar = identicon(team.name, 6)
             if not self.config.banking:
-                team.money = 0
+                team.set_score("start", 0)
+            else:
+                team.set_score("start", self.config.starting_team_money)
             level_0 = GameLevel.by_number(0)
             if not level_0:
                 level_0 = GameLevel.all()[0]
@@ -537,11 +647,24 @@ class RegistrationHandler(BaseHandler):
             emailtoken.user_id = user.id
             emailtoken.value = sha256(email_token).hexdigest()
             receivers = [user.email]
-            message = self.create_validate_message(user, email_token)
-            smtpObj = smtplib.SMTP(options.mail_host, port=options.mail_port)
+            message = email_rfc2822_compliance(
+                self.create_validate_message(user, email_token)
+            )
+            try:
+                if options.mail_port == 465:
+                    smtpObj = smtplib.SMTP_SSL(
+                        options.mail_host, port=options.mail_port, timeout=5
+                    )
+                else:
+                    smtpObj = smtplib.SMTP(
+                        options.mail_host, port=options.mail_port, timeout=5
+                    )
+                    smtpObj.starttls()
+            except Exception as e:
+                logging.warning("SMTP Failed with Connection issue (%s)." % e)
+                return
             smtpObj.set_debuglevel(False)
             try:
-                smtpObj.starttls()
                 try:
                     smtpObj.login(options.mail_username, options.mail_password)
                 except smtplib.SMTPNotSupportedError as e:
@@ -567,7 +690,7 @@ class RegistrationHandler(BaseHandler):
             and not len(user.email) > 0
         ):
             logging.info(
-                "Email validation failed: No Email Address for user %s.  Deleteing User"
+                "Email validation failed: No Email Address for user %s.  Deleting User"
                 % user.handle
             )
             self.dbsession.delete(user)
@@ -582,11 +705,13 @@ class RegistrationHandler(BaseHandler):
             account = urlsafe_b64encode(account)
             token = urlsafe_b64encode(token)
         if options.ssl:
-            origin = options.origin.replace("ws://", "https://").replace(
-                "wss://", "https://"
+            origin = options.origin.replace("wss://", "https://").replace(
+                "ws://", "https://"
             )
         else:
-            origin = options.origin.replace("ws://", "http://")
+            origin = options.origin.replace("wss://", "https://").replace(
+                "ws://", "http://"
+            )
         validate_url = "%s/registration/token?u=%s&t=%s" % (origin, account, token)
         remote_ip = (
             self.request.headers.get("X-Real-IP")
@@ -600,6 +725,7 @@ class RegistrationHandler(BaseHandler):
         header.append("MIME-Version: 1.0")
         header.append('Content-Type: text/html; charset="UTF-8"')
         header.append("Content-Transfer-Encoding: BASE64")
+        header.append("\r\n")
         header.append("")
         f = open("templates/public/valid_email.html", "r")
         template = (
@@ -690,20 +816,20 @@ class FakeRobotsHandler(BaseHandler):
 
 class AboutHandler(BaseHandler):
     def get(self, *args, **kwargs):
-        """ Renders the about page """
+        """Renders the about page"""
         self.render("public/about.html")
 
 
 class ForgotPasswordHandler(BaseHandler):
     def get(self, *args, **kwargs):
-        """ Renders the Forgot Password Reset page """
+        """Renders the Forgot Password Reset page"""
         if len(options.mail_host) > 0:
             self.render("public/forgot.html", errors=None, info=None)
         else:
             self.redirect("public/404")
 
     def post(self, *args, **kwargs):
-        """ Sends the password reset to email """
+        """Sends the password reset to email"""
         user = User.by_email(self.get_argument("email", ""))
         if user is not None and len(options.mail_host) > 0 and len(user.email) > 0:
             reset_token = encode(urandom(16), "hex")
@@ -713,7 +839,9 @@ class ForgotPasswordHandler(BaseHandler):
             self.dbsession.add(passtoken)
             self.dbsession.commit()
             receivers = [user.email]
-            message = self.create_reset_message(user, reset_token)
+            message = email_rfc2822_compliance(
+                self.create_reset_message(user, reset_token)
+            )
             smtpObj = smtplib.SMTP(options.mail_host, port=options.mail_port)
             smtpObj.set_debuglevel(False)
             try:
@@ -747,11 +875,13 @@ class ForgotPasswordHandler(BaseHandler):
             account = urlsafe_b64encode(account)
             token = urlsafe_b64encode(token)
         if options.ssl:
-            origin = options.origin.replace("ws://", "https://").replace(
-                "wss://", "https://"
+            origin = options.origin.replace("wss://", "https://").replace(
+                "ws://", "https://"
             )
         else:
-            origin = options.origin.replace("ws://", "http://")
+            origin = options.origin.replace("wss://", "https://").replace(
+                "ws://", "http://"
+            )
         reset_url = "%s/reset/token?u=%s&p=%s" % (origin, account, token)
         remote_ip = (
             self.request.headers.get("X-Real-IP")
@@ -765,6 +895,7 @@ class ForgotPasswordHandler(BaseHandler):
         header.append("MIME-Version: 1.0")
         header.append('Content-Type: text/html; charset="UTF-8"')
         header.append("Content-Transfer-Encoding: BASE64")
+        header.append("\r\n")
         header.append("")
         f = open("templates/public/reset_email.html", "r")
         template = (
@@ -786,7 +917,7 @@ class ForgotPasswordHandler(BaseHandler):
 
 class ResetPasswordHandler(BaseHandler):
     def get(self, *args, **kwargs):
-        """ Renders the Token Reset page """
+        """Renders the Token Reset page"""
         if len(options.mail_host) > 0:
             try:
                 uuid = decode(urlsafe_b64decode(self.get_argument("u", "")))
@@ -855,7 +986,7 @@ class ResetPasswordHandler(BaseHandler):
 
 class ValidEmailHandler(BaseHandler):
     def get(self, *args, **kwargs):
-        """ Validates Email and renders login page """
+        """Validates Email and renders login page"""
         if len(options.mail_host) > 0:
             error = None
             info = None
@@ -879,8 +1010,9 @@ class ValidEmailHandler(BaseHandler):
                     self.dbsession.add(user)
                     self.dbsession.commit()
                     self.event_manager.user_joined_team(user)
+                    send_user_validated_webhook(user)
                 else:
-                    error = ["Faield to validate email for %s" % user.handle]
+                    error = ["Failed to validate email for %s" % user.handle]
             elif len(user_uuid) > 0 and not user:
                 error = ["Invalid user for email validation"]
             self.render("public/login.html", info=info, errors=error)

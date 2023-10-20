@@ -40,12 +40,12 @@ from setup import __version__
 
 
 def current_time():
-    """ Nicely formatted current time as a string """
+    """Nicely formatted current time as a string"""
     return str(datetime.now()).split(" ")[1].split(".")[0]
 
 
 def start():
-    """ Update the database schema """
+    """Update the database schema"""
     try:
         from handlers import update_db
 
@@ -57,9 +57,7 @@ def start():
             os._exit(1)
 
     """ Starts the application """
-    from handlers import start_server, load_history
-
-    load_history()
+    from handlers import start_server
 
     prefix = "https://" if options.ssl else "http://"
     # TODO For docker, it would be nice to grab the mapped docker port
@@ -130,7 +128,7 @@ def setup():
 
 
 def recovery():
-    """ Starts the recovery console """
+    """Starts the recovery console"""
     from setup.recovery import RecoveryConsole
 
     print(INFO + "%s : Starting recovery console ..." % current_time())
@@ -142,7 +140,7 @@ def recovery():
 
 
 def setup_xml(xml_params):
-    """ Imports XML file(s) """
+    """Imports XML file(s)"""
     from setup.xmlsetup import import_xml
 
     for index, xml_param in enumerate(xml_params):
@@ -154,7 +152,7 @@ def setup_xml(xml_params):
 
 
 def generate_teams(num_teams):
-    """ Generates teams by number """
+    """Generates teams by number"""
     from models import Team, dbsession
 
     for i in range(0, num_teams):
@@ -166,7 +164,7 @@ def generate_teams(num_teams):
 
 
 def generate_teams_by_name(team_names):
-    """ Generates teams by their names """
+    """Generates teams by their names"""
     from models import Team, dbsession
 
     for i in range(0, len(team_names)):
@@ -178,7 +176,7 @@ def generate_teams_by_name(team_names):
 
 
 def generate_admins(admin_names):
-    """ Creates admin users with the syntax '<handle> <email> <password>' """
+    """Creates admin users with the syntax '<handle> <email> <password>'"""
     from models import User, Permission, dbsession
     from models.User import ADMIN_PERMISSION
 
@@ -200,7 +198,7 @@ def generate_admins(admin_names):
 
 
 def tests():
-    """ Creates a temporary sqlite database and runs the unit tests """
+    """Creates a temporary sqlite database and runs the unit tests"""
     print(INFO + "%s : Running unit tests ..." % current_time())
     from tests import setup_database, teardown_database
 
@@ -221,7 +219,7 @@ def restart():
 
 
 def update():
-    """ Update RTB to the latest repository code. """
+    """Update RTB to the latest repository code."""
     os.system("git pull")
 
 
@@ -235,7 +233,7 @@ def version():
 
 
 def check_cwd():
-    """ Checks to make sure the cwd is the application root directory """
+    """Checks to make sure the cwd is the application root directory"""
     app_root = os.path.dirname(os.path.abspath(__file__))
     if app_root != os.getcwd():
         print(INFO + "Switching CWD to '%s'" % app_root)
@@ -265,16 +263,9 @@ def options_parse_environment():
                 options[item] = value
             else:
                 logging.error(
-                    "Environment Confirguation (%s): unable to convert type %s to %s for %s"
+                    "Environment Configuration (%s): unable to convert type %s to %s for %s"
                     % (item.upper(), type(value), type(options[item]), value)
                 )
-    if os.environ.get("DEMO"):
-        setup_xml(["setup/demo_juiceshop.xml"])
-        from libs.ConfigHelpers import create_demo_user
-
-        logging.info("Setting Up Demo Environment...")
-        create_demo_user()
-        options.autostart_game = True
 
 
 def help():
@@ -282,6 +273,12 @@ def help():
         "\tNo options specified. Examples: 'rootthebox.py --setup=prod' or 'rootthebox.py --start'"
     ]
     help_response.append("\t\t--recovery\tstart the recovery console")
+    help_response.append(
+        "\t\t--reset\tkeeps teams / players and resets the game to start"
+    )
+    help_response.append(
+        "\t\t--reset-delete\tdeletes teams / players and resets the game to start"
+    )
     help_response.append("\t\t--restart\trestart the server")
     help_response.append("\t\t--save\t\tsave the current configuration to file")
     help_response.append("\t\t--setup\t\tsetup a database (prod|devel|docker)")
@@ -374,6 +371,14 @@ define(
     help="url to receive webhook callbacks when certain game actions occur, such as flag capture",
 )
 
+define(
+    "api_keys",
+    multiple=True,
+    default=[],
+    group="server",
+    help="keys to use for api access",
+)
+
 # Mail Server
 define("mail_host", default="", group="mail", help="SMTP server")
 
@@ -406,6 +411,14 @@ define(
     default=False,
     group="application",
     help="start the game automatically",
+    type=bool,
+)
+
+define(
+    "suspend_registration",
+    default=False,
+    group="application",
+    help="suspend the registration automatically",
     type=bool,
 )
 
@@ -489,6 +502,14 @@ define(
     default=[{"name": "CyberChef", "url": "/cyberchef/", "target": "_blank"}],
     group="application",
     help="links to add to the tool menu",
+)
+
+define(
+    "show_organizor_help",
+    default=False,
+    group="application",
+    help="show an info text on the user's home page about organizor help",
+    type=bool,
 )
 
 # Azure AD
@@ -586,6 +607,14 @@ define(
     default="Root the Box",
     group="game",
     help="the name of the current game",
+    type=game_type,
+)
+
+define(
+    "game_version",
+    default="1.0",
+    group="game",
+    help="optional version for this game",
     type=game_type,
 )
 
@@ -760,6 +789,14 @@ define(
 )
 
 define(
+    "player_use_handle",
+    default=True,
+    group="game",
+    help="when in individual playstyle, use handle or playername",
+    type=bool,
+)
+
+define(
     "max_team_size",
     default=4,
     group="game",
@@ -824,6 +861,22 @@ define(
 )
 
 define(
+    "allowed_market_items",
+    default=["Source Code Market", "Password Security", "Federal Reserve", "SWAT"],
+    group="game",
+    help="if black market is enabled only allow these market items",
+    multiple=True,
+)
+
+define(
+    "show_source_code_description",
+    default=False,
+    group="game",
+    help="show description of a source code file to users",
+    type=bool,
+)
+
+define(
     "password_upgrade_cost",
     default=1000,
     group="game",
@@ -869,6 +922,14 @@ define(
     group="game",
     help="Visibility of the Scoreboard - public, players, admins",
     type=game_type,
+)
+
+define(
+    "scoreboard_lazy_update",
+    default=False,
+    group="game",
+    help="Skips aggressive gamestate update on scoreboard refresh",
+    type=bool,
 )
 
 define(
@@ -966,18 +1027,26 @@ define(
 
 # I/O Loop Settings
 define(
-    "history_snapshot_interval",
-    default=int(60000 * 5),
-    group="game",
-    help="interval to create history snapshots (milliseconds)",
-    type=int,
-)
-
-define(
     "bot_reward_interval",
     default=int(60000 * 15),
     group="game",
     help="interval for rewarding botnets (milliseconds)",
+    type=int,
+)
+
+define(
+    "automatic_ban",
+    default=False,
+    group="anti-bruteforce",
+    type=bool,
+    help="configures the option to automatically ban bruteforce",
+)
+
+define(
+    "blacklist_threshold",
+    default=10,
+    group="anti-bruteforce",
+    help="Sets the threshold for the automatic ban",
     type=int,
 )
 
@@ -1041,6 +1110,20 @@ define("start", default=False, help="start the server", type=bool)
 
 define("restart", default=False, help="restart the server", type=bool)
 
+define(
+    "reset",
+    default=False,
+    help="keeps teams / players and resets the game to start",
+    type=bool,
+)
+
+define(
+    "reset_delete",
+    default=False,
+    help="deletes teams / players and resets the game to start",
+    type=bool,
+)
+
 define("update", default=False, help="pull the latest code via github", type=bool)
 
 define("version", default=False, help="display version information and exit", type=bool)
@@ -1057,7 +1140,9 @@ if __name__ == "__main__":
     # We need this to pull the --config option
     try:
         options.parse_command_line()
-    except:
+        options_parse_environment()
+    except Exception as e:
+        print(e)
         os._exit(1)
 
     check_cwd()
@@ -1065,15 +1150,18 @@ if __name__ == "__main__":
     if options.version:
         version()
     elif options.setup.startswith("docker"):
-        if not os.path.isfile(options.sql_database) and not os.path.isfile(
-            "%s.db" % options.sql_database
+        if not os.path.isfile(options.config) or (
+            options.sql_dialect == "sqlite"
+            and not os.path.isfile(options.sql_database)
+            and not os.path.isfile("%s.db" % options.sql_database)
         ):
             logging.info("Running Docker Setup")
+            if os.path.isfile(options.config):
+                options.parse_config_file(options.config)
             options.sql_database = "files/rootthebox.db"
             options.admin_ips = []  # Remove admin ips due to docker 127.0.0.1 mapping
             options.memcached = "memcached"
             options.x_headers = True
-            options_parse_environment()  # Pick up env vars before saving config file.
             save_config()
             setup()
         else:
@@ -1097,6 +1185,14 @@ if __name__ == "__main__":
 
     # Make sure that cli args always have president over the file and env
     options.parse_command_line()
+
+    if os.environ.get("DEMO"):
+        setup_xml(["setup/demo_juiceshop.xml"])
+        from libs.ConfigHelpers import create_demo_user
+
+        logging.info("Setting Up Demo Environment...")
+        create_demo_user()
+        options.autostart_game = True
 
     # If authenticating with Azure AD (i.e. enterprise scenario) There's a few settings which
     # don't make sense, so force them to disabled.
@@ -1129,5 +1225,15 @@ if __name__ == "__main__":
         setup_xml(options.xml)
     elif options.tests:
         tests()
+    elif options.reset:
+        from models import dbsession
+        from handlers.AdminHandlers import AdminResetHandler
+
+        AdminResetHandler.reset(dbsession)
+    elif options.reset_delete:
+        from models import dbsession
+        from handlers.AdminHandlers import AdminResetDeleteHandler
+
+        AdminResetDeleteHandler.reset(dbsession)
     else:
         print(help())

@@ -12,7 +12,7 @@ Root the Box is a real-time capture the flag (CTF) scoring engine for computer w
 ## Screenshots & Demo
 Additional platform [screenshots](https://github.com/moloch--/RootTheBox/wiki/Screenshots) and game examples.
 
-[RootTheBox Demo](https://rootthebox.herokuapp.com/) – _Note it may take a few seconds to wake up. Also, please don't change passwords on the example accounts, but feel free to register a new user._
+[RootTheBox Demo](https://roottheboxdemo-ih63mtsgxa-uc.a.run.app/) – _Note it may take a few seconds to wake up. Also, please don't change passwords on the example accounts, but feel free to register a new user._
 -   Admin Username `admin` Password `rootthebox`
 -   Player Username `player` Password `rootthebox`
 
@@ -24,7 +24,7 @@ If you’re using RootTheBox, please ★Star this repository to show your intere
 -   Real-time animated scoreboard, graphs, and status updates using websockets
 -   Flag Types: Static, Regex, Datetime, Multiple Choice, File - w/options for case sensitivity
 -   Options for Penalties, Hints, Attempts, Level Bonuses, Dynamic Scoring, Categories and more
--   Built-in team based file/text sharing and Admin game material distirbution
+-   Built-in team based file/text sharing and Admin game material distribution
 -   Integrated [CyberChef](https://gchq.github.io/CyberChef/) in tools menu
 -   Chat support, with optional [Rocket Chat](https://rocket.chat/) integration
 -   [CTF Time](https://ctftime.org/) compatible JSON scoreboard feed
@@ -44,7 +44,7 @@ See the [Root the Box Wiki](https://github.com/moloch--/RootTheBox/wiki)
 
 ## Platform Requirements
 
--   [Python 2.7.x or <= 3.8.x](https://www.python.org/), [PyPy](http://pypy.org/) or [Docker](https://github.com/moloch--/RootTheBox/wiki/Docker-Deployment).  (*Note: Python 3.9 breaks thigns as it removes Py2/3 compatibility.*)
+-   [Python 3](https://www.python.org/), [PyPy](http://pypy.org/) or [Docker](https://github.com/moloch--/RootTheBox/wiki/Docker-Deployment).
 -   Install scripts are for [Ubuntu](http://www.ubuntu.com/) >= 18.04 (or [Debian](https://www.debian.org/)) but the application should work on any recent Linux, BSD, MacOS, or Windows system.
 
 ## Questions? Problems? Feature Requests?

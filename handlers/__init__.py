@@ -44,12 +44,12 @@ from modules.Recaptcha import Recaptcha
 from modules.AppTheme import AppTheme
 from libs.ConsoleColors import *
 from libs.Scoreboard import Scoreboard, score_bots
-from libs.GameHistory import GameHistory
 from libs.DatabaseConnection import DatabaseConnection
 from libs.StringCoding import encode
 from handlers.BotnetHandlers import *
 from handlers.UserHandlers import *
 from handlers.AdminHandlers import *
+from handlers.APIHanders import *
 from handlers.ErrorHandlers import *
 from handlers.PublicHandlers import *
 from handlers.MarketHandlers import *
@@ -71,7 +71,6 @@ except ImportError:
 
 # Singletons
 io_loop = IOLoop.instance()
-game_history = GameHistory.instance()
 
 
 def get_cookie_secret():
@@ -90,6 +89,7 @@ urls = [
     (r"/about", AboutHandler),
     (r"/", HomePageHandler),
     (r"/robots(|\.txt)", FakeRobotsHandler),
+    (r"/status", StatusHandler),
     # Scoreboard Handlers - ScoreboardHandlers.py
     (r"/scoreboard", ScoreboardHandler),
     (r"/scoreboard/history", ScoreboardHistoryHandler),
@@ -141,7 +141,7 @@ urls = [
     (r"/user/settings", SettingsHandler),
     (r"/user/settings/(.*)", SettingsHandler),
     (r"/logout", LogoutHandler),
-    # Notificaiton handlers - NotificationHandlers.py
+    # Notification handlers - NotificationHandlers.py
     (r"/notifications/all", AllNotificationsHandler),
     (r"/connect/notifications/updates", NotifySocketHandler),
     # Static Handlers - StaticFileHandler.py
@@ -185,12 +185,15 @@ urls = [
     (r"/admin/users/edit/teams/scores", AdminEditTeamsHandler),
     (r"/admin/users/delete/(.*)", AdminDeleteUsersHandler),
     (r"/admin/ajax/(user|team)", AdminAjaxUserHandler),
-    (r"/admin/lock/(user|box)", AdminLockHandler),
+    (r"/admin/lock/(level|corp|user|box|flag)", AdminLockHandler),
     (r"/admin/configuration", AdminConfigurationHandler),
     (r"/admin/gitstatus", AdminGitStatusHandler),
     (r"/admin/export/(.*)", AdminExportHandler),
     (r"/admin/import/xml", AdminImportXmlHandler),
     (r"/admin/reset", AdminResetHandler),
+    (r"/admin/resetdelete", AdminResetDeleteHandler),
+    # API handlers - APIHandlers.py
+    (r"/api/actions", APIActionHandler),
     # Error handlers - ErrorHandlers.py
     (r"/403", UnauthorizedHandler),
     (r"/gamestatus", StopHandler),
@@ -234,25 +237,22 @@ app = Application(
     # Enable XSRF protected forms; not optional
     xsrf_cookies=True,
     # Anti-bruteforce
-    automatic_ban=False,
-    blacklist_threshold=10,
+    automatic_ban=options.automatic_ban,
+    blacklist_threshold=options.blacklist_threshold,
     blacklisted_ips=[],
     failed_logins={},
     # Debug mode
     debug=options.debug,
     # Flags used to run the game
     game_started=options.autostart_game,
-    suspend_registration=False,
+    suspend_registration=options.suspend_registration,
     countdown_timer=False,
     hide_scoreboard=False,
     stop_timer=False,
     temp_global_notifications=None,
     # Callback functions
     score_bots_callback=PeriodicCallback(score_bots, options.bot_reward_interval),
-    history_callback=PeriodicCallback(
-        game_history.take_snapshot, options.history_snapshot_interval
-    ),
-    # Scoreboard Hightlights
+    # Scoreboard Highlights
     scoreboard_history={},
     scoreboard_state={},
     # Application version
@@ -282,18 +282,13 @@ def update_db(update=True):
         command.stamp(alembic_cfg, "head")
 
 
-def load_history():
-    game_history._load()
-
-
 # Main entry point
 def start_server():
-    """ Main entry point for the application """
+    """Main entry point for the application"""
     locale.set_default_locale("en_US")
     locale.load_translations("locale")
     if options.autostart_game:
         app.settings["game_started"] = True
-        app.settings["history_callback"].start()
         if options.use_bots:
             app.settings["score_bots_callback"].start()
     # Setup server object
@@ -328,9 +323,8 @@ def start_server():
         logging.warning(
             "%sDebug mode is enabled; DO NOT USE THIS IN PRODUCTION%s" % (bold + R, W)
         )
-    if options.autostart_game:
-        logging.info("The game is about to begin, good hunting!")
     try:
+        logging.info("Building Scoreboard Gamestate...")
         Scoreboard.update_gamestate(app)
     except OperationalError as err:
         if "Table definition has changed" in str(err):
@@ -338,6 +332,8 @@ def start_server():
             return "restart"
         else:
             logging.error("There was a problem starting RootTheBox. Error: " + str(err))
+    if options.autostart_game:
+        logging.info("The game is about to begin, good hunting!")
     try:
         io_loop.start()
     except KeyboardInterrupt:

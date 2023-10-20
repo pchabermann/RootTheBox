@@ -133,7 +133,7 @@
 {% end %}
 
 {% block content %}
-    <!-- Visable -->
+    <!-- Visible -->
     <div class="container">
         <h1>
             {% if box.operating_system.lower() == 'windows' %}
@@ -221,13 +221,13 @@
         {% set flaghints = [] %}
 
         {% set flagcount=0 %}
-        {% for index, flag in enumerate(box.flags) %}
+        {% for index, flag in enumerate(sorted(box.flags)) %}
             {% if team and flag in team.flags %}
                 {% set flagcount += 1 %}
             {% end %}
         {% end %}
         {% if len(box.hints) != 0 %}
-            <input id="hintbanking" value="str(config.banking).lower()" type="hidden" />
+            <input id="hintbanking" value="{{ str(options.banking).lower() }}" type="hidden" />
             {% for index, hint in enumerate(box.hints) %}
                 {% if hint.flag_id %}
                     {% set flaghints.append(hint) %}
@@ -270,7 +270,7 @@
                         <th>#</th>
                         <th><!-- Name --></th>
                         <th><!-- Description --></th>
-                        <th style="text-align: center;">{{ _("Captures") }}</th>
+                        <th style="text-align: center;">{% if options.scoreboard_visibility != 'admins' %}{{ _("Captures") }}{% end %}</th>
                         {% if team and options.penalize_flag_value and not user.is_admin() %}
                                 <th style="text-align: center;">{{ _("Attempts") }}</th>
                         {% end %}
@@ -281,7 +281,7 @@
                         {% end %}
                     </tr>
                 </thead>
-                {% for index, flag in enumerate(box.flags) %}
+                {% for index, flag in enumerate(sorted(box.flags)) %}
                     {% set penalty = Penalty.by_count(flag, team) %}
                     <tbody class="flagbody">
                         <tr {% if team and flag in team.flags %}class="flag-expand" style="cursor: pointer;"{% end %}>
@@ -294,9 +294,9 @@
                         {% end %}
                             <td class="shortcolumn" style="vertical-align: middle;">{{ box.flags.index(flag) +1 }}</td>
                             <td class="shortcolumn" style="vertical-align: middle; padding-right: 20px; font-weight: bold;">{{ flag.name }}</td>
-                            {% if team and flag.lock_id and not Flag.by_id(flag.lock_id) in team.flags %}
+                            {% if team and flag.lock_id and Flag.by_id(flag.lock_id) and not Flag.by_id(flag.lock_id) in team.flags %}
                                 <td class="descriptioncol"><i class="fa fa-lock"></i> {{ _("Locked by") }} {{ Flag.by_id(flag.lock_id).name }}</td>
-                                <td class="shortcolumn centercolumn">{{ len(Flag.team_captures(flag.id)) }}</td>
+                                <td class="shortcolumn centercolumn">{% if options.scoreboard_visibility != 'admins' %}{{ len(Flag.team_captures(flag.id)) }}{% end %}</td>
                                 {% if options.penalize_flag_value %}
                                 <td class="shortcolumn centercolumn">0</td>
                                 {% end %}
@@ -305,7 +305,7 @@
                                 <td></td>
                             {% else %}
                                 <td style="width: 100%;"></td>
-                                <td class="shortcolumn centercolumn">{{ len(Flag.team_captures(flag.id)) }}</td>
+                                <td class="shortcolumn centercolumn">{% if options.scoreboard_visibility != 'admins' %}{{ len(Flag.team_captures(flag.id)) }}{% end %}</td>
                                 {% if team and options.penalize_flag_value and not user.is_admin() %}
                                     <td class="shortcolumn centercolumn">{% if flag in team.flags %}{{ penalty + 1 }}{% else %}{{ penalty }}{% end %}</td>
                                 {% end %}
@@ -357,7 +357,7 @@
                                 {% end %}
                             {% end %}
                         </tr>
-                        {% if team and flag.lock_id and not Flag.by_id(flag.lock_id) in team.flags %}
+                        {% if team and flag.lock_id and Flag.by_id(flag.lock_id) and not Flag.by_id(flag.lock_id) in team.flags %}
                         {% else %}
                         <tr {% if team and flag in team.flags %}class="flag-collapse" style="display: none;"{% end %}>
                             {% if team and flag in team.flags %}
@@ -415,7 +415,7 @@
                 {% end %}
             </table>
         </div>
-        {% if len(box.visable_ips) != 0 %}
+        {% if len(box.visible_ips) != 0 %}
             <div class="well">
                 <table class="table table-hover">
                     <caption><h4> - {{ _("Known IP Addresses") }} - </h4></caption>
@@ -428,7 +428,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for index, ip in enumerate(box.visable_ips) %}
+                        {% for index, ip in enumerate(box.visible_ips) %}
                             <tr>
                                 <td>{{ index + 1 }}</td>
                                 <td>{{ str(ip) }}</td>
@@ -441,7 +441,7 @@
             </div>
         {% end %}
         {% if len(box.hints) != 0 %}
-            <input id="hintbanking" value="str(config.banking).lower()" type="hidden" />
+            <input id="hintbanking" value="{{ str(options.banking).lower() }}" type="hidden" />
             {% if len(boxhints) > 0 %}
                 <div class="well">
                     <table class="table table-hover">

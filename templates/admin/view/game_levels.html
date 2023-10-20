@@ -3,12 +3,18 @@
 {% block title %}{{ _("Game Levels") }}{% end %}
 
 {% block header %}
+<link rel="stylesheet" href="/static/css/pages/admin/game_objects.css" type="text/css" />
 <script src="/static/js/pages/admin/view/game_levels.js"></script>
 {% end %}
 
 {% block modals %}
 {% from tornado.options import options %}
 {% from models.GameLevel import GameLevel %}
+    <!-- Lock Corp Form -->
+    <form id="lock-level-form" action="/admin/lock/level" method="post">
+        {% raw xsrf_form_html() %}
+        <input id="lock-level-uuid" name="uuid" type="hidden" />
+    </form>
     <!-- Edit Level -->
     <div id="edit-game-level-modal" class="modal hide fade" style="display: none; ">
         <div class="modal-header">
@@ -46,10 +52,11 @@
                     <div class="controls">
                         <select id="game_level-type" name="type">
                             <option value="none">{{ _("No Lock") }}</option>
+                            <option value="locked">{{ _("Locked") }}</option>
                             <option value="buyout">{{ _("Purchase Unlock") }}</option>
                             <option value="progress">{{ _("Game Progress") }}</option>
                             <option value="points">{{ _("Game Points") }}</option>
-                            <option value="hidden">{{ _("Managed") }}</option>
+                            <option value="hidden">{{ _("Managed") }} ({{ _("Edit Access") }})</option>
                         </select>
                     </div>
                 </div>
@@ -91,7 +98,7 @@
                 <div>
                     <table width="100%">
                         <tbody>
-                            <tr><td>Available</td><td>Access</td></tr>
+                            <tr><td>{{ _("Level Locked")}} ({{ _("Hidden") }})</td><td>{{ _("Level Unlocked")}} ({{ _("Visible") }})</td></tr>
                             <tr>
                                 <td style="padding: 5px 0;">
                                     <select id="availableList" name="availableList" multiple="multiple"
@@ -207,7 +214,7 @@
         </h1>
         <br />
         {% for index, level in enumerate(GameLevel.all()) %}
-            <div class="well">
+            <div class="well{% if level.locked %} locked{% end %}">
                 <h2 class="levelheader">
                     {{ level.name }}&nbsp;
                 </h2>
@@ -224,15 +231,28 @@
                     <i class="fa fa-pencil"></i>
                     {{ _("Edit Access") }}
                 </button>
+                {% if level.locked %}
+                    <a id="lock-level-button-{{ level.uuid }}" class="btn btn-small btn-warning" data-uuid="{{ level.uuid }}" style="float: right; margin-top: 5px; margin-right: 10px;">
+                        <i class="fa fa-fw fa-lock"></i>
+                        {{_("Unlock")}}&nbsp;
+                    </a>
+                {% else %}
+                    <a id="lock-level-button-{{ level.uuid }}" class="btn btn-small btn-success" data-uuid="{{ level.uuid }}" style="float: right; margin-top: 5px; margin-right: 10px;">
+                        <i class="fa fa-fw fa-unlock"></i>
+                        {{_("Lock")}}&nbsp;
+                    </a>
+                {% end %}
                 <div style="padding-left: 3px; margin-bottom: -10px;">
                 {% if level._name  and level._name != level.name %}<strong>{{ _("Level") }} #{{ level.number }}</strong>&nbsp;&nbsp;&ndash;&nbsp;{% end %}
-                    {% if level._type == "none" or level.buyout == 0 %}
+                    {% if level.type == "hidden" %}
+                        <i class="fa fa-lock"></i> {{ _("Managed") }}
+                    {% elif level.type == "locked" %}
+                        <i class="fa fa-lock"></i> {{ _("Locked") }}
+                    {% elif level.type == "none" or level.buyout == 0 %}
                         <i class="fa fa-unlock-alt"></i> {{ _("No Lock") }}
-                    {% elif level._type == "hidden" %}
-                        <i class="fa fa-lock"></i>
-                    {% elif level._type == "buyout" %}
+                    {% elif level.type == "buyout" %}
                         <i class="fa fa-lock"></i> {{ _("Unlocks for") }} {% if options.banking %}{{ _("$") }}{% end %}{{ level.buyout }}{% if not options.banking %} {{ _("points") }}{% end %}
-                    {% elif level._type == "points" %}
+                    {% elif level.type == "points" %}
                         <i class="fa fa-lock"></i> {{ _("Unlocks at") }} {% if options.banking %}{{ _("$") }}{% end %}{{ level.buyout }}{% if not options.banking %} {{ _("points") }}{% end %}
                     {% else %}
                         {% set last = GameLevel.last_level(level.id) %}
@@ -252,7 +272,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for index, box in enumerate(level.boxes) %}
+                            {% for index, box in enumerate(sorted(level.boxes)) %}
                                 <tr>
                                     <td class="shortcolumn">{{ index + 1 }}</td>
                                     <td>{{ box.name }}</td>

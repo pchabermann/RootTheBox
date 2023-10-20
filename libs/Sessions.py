@@ -9,9 +9,14 @@ This module implements sessions for Tornado using Memcached.
 
 import re
 import os
+import sys
 import json
 import logging
-import collections
+
+if sys.version_info.major >= 3 and sys.version_info.minor >= 10:
+    from collections.abc import MutableMapping
+else:
+    from collections import MutableMapping
 
 try:
     import bmemcached as memcache
@@ -24,7 +29,7 @@ from tornado.options import options
 from libs.StringCoding import encode, decode
 
 
-class BaseSession(collections.MutableMapping):
+class BaseSession(MutableMapping):
     """
     The base class for the session object. Work with the session object
     is really simple, just treat is as any other dictionary:
@@ -39,11 +44,11 @@ class BaseSession(collections.MutableMapping):
     regenerated periodically.
 
     The session_id attribute stores a unique, random, 64 characters long
-    string serving as an indentifier.
+    string serving as an identifier.
 
     To create a new storage system for the sessions, subclass BaseSession
     and define save(), load() and delete(). For inspiration, check out any
-    of the already available classes and documentation to aformentioned
+    of the already available classes and documentation to aforementioned
     functions.
     """
 
@@ -127,7 +132,7 @@ class BaseSession(collections.MutableMapping):
         pass
 
     def serialize(self):
-        """ We use JSON instead of Pickles """
+        """We use JSON instead of Pickles"""
         dump = {
             "session_id": str(self.session_id),
             "data": self.data,

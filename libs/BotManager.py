@@ -50,7 +50,7 @@ class _BotDatabaseObject(object):
 
     @declared_attr
     def __tablename__(self):
-        """ Converts class name from camel case to snake case """
+        """Converts class name from camel case to snake case"""
         name = self.__name__
         return str(
             name[0].lower()
@@ -65,7 +65,7 @@ BotDatabaseObject = declarative_base(cls=_BotDatabaseObject)
 
 
 class Bot(BotDatabaseObject):
-    """ Bot Class """
+    """Bot Class"""
 
     last_ping = Column(DateTime, default=datetime.now)
     wsock_uuid = Column(Unicode(36), nullable=False)
@@ -80,12 +80,12 @@ class Bot(BotDatabaseObject):
 
     @property
     def box(self):
-        """ Pull box object from persistent db """
+        """Pull box object from persistent db"""
         return dbsession.query(Box).by_uuid(self.box_uuid)
 
     @property
     def team(self):
-        """ Pull box object from persistent db """
+        """Pull box object from persistent db"""
         return dbsession.query(Box).by_uuid(self.box_uuid)
 
     def to_dict(self):
@@ -134,6 +134,17 @@ class BotManager(object):
         bots = self.botdb.query(Bot).filter_by(team_name=str(team)).all()
         return [self.botnet[bot.wsock_uuid] for bot in bots]
 
+    def count_all_teams(self):
+        from models.Team import Team
+
+        teams = Team.all()
+        botcount = {}
+        for team in teams:
+            botcount[team.uuid] = 0
+        for bot in self.botdb.query(Bot).all():
+            botcount[bot.team_uuid] += 1
+        return botcount
+
     def count_by_team(self, team):
         return len(self.by_team(team))
 
@@ -142,6 +153,8 @@ class BotManager(object):
 
     def add_bot(self, bot_wsocket):
         if not self.is_duplicate(bot_wsocket):
+            from models.Team import Team
+
             bot = Bot(
                 wsock_uuid=str(bot_wsocket.uuid),
                 team_name=str(bot_wsocket.team_name),
@@ -150,36 +163,42 @@ class BotManager(object):
                 box_uuid=str(bot_wsocket.box_uuid),
                 remote_ip=str(bot_wsocket.remote_ip),
             )
+            team = Team.by_uuid(bot.team_uuid)
             bot.dbsession = self.dbsession
             self.botdb.add(bot)
             self.botdb.flush()
             self.botnet[bot_wsocket.uuid] = bot_wsocket
-            self.notify_monitors(bot.team_name)
+
+            team.set_bot(self.count_by_team_uuid(team.uuid))
+            self.notify_monitors(team.name)
             return True
         else:
             return False
 
     def save_bot(self, bot):
-        """ Save changes to a bot and flush """
+        """Save changes to a bot and flush"""
         self.botdb.add(bot)
         self.botdb.flush()
 
     def remove_bot(self, bot_wsocket):
         bot = self.botdb.query(Bot).filter_by(wsock_uuid=str(bot_wsocket.uuid)).first()
         if bot is not None:
+            from models.Team import Team
+
+            team = Team.by_uuid(bot.team_uuid)
             logging.debug("Removing bot '%s' at %s" % (bot.team_uuid, bot.remote_ip))
-            team = bot.team_name
             self.botnet.pop(bot_wsocket.uuid, None)
             self.botdb.delete(bot)
             self.botdb.flush()
-            self.notify_monitors(team)
+            team.set_bot(self.count_by_team_uuid(team.uuid))
+            self.notify_monitors(team.name)
         else:
             logging.warning(
                 "Failed to remove bot '%s' does not exist in manager" % bot_wsocket.uuid
             )
 
     def is_duplicate(self, bot_wsocket):
-        """ Check for duplicate bots """
+        """Check for duplicate bots"""
         assert bot_wsocket.team_uuid is not None
         assert bot_wsocket.box_uuid is not None
         return (
@@ -195,13 +214,13 @@ class BotManager(object):
         )
 
     def add_monitor(self, monitor_wsocket):
-        """ Add new monitor socket """
+        """Add new monitor socket"""
         if monitor_wsocket.team_name not in self.monitors:
             self.monitors[monitor_wsocket.team_name] = []
         self.monitors[monitor_wsocket.team_name].append(monitor_wsocket)
 
     def remove_monitor(self, monitor_wsocket):
-        """ Remove a monitor socket """
+        """Remove a monitor socket"""
         if (
             monitor_wsocket.team_name in self.monitors
             and monitor_wsocket in self.monitors[monitor_wsocket.team_name]
@@ -209,7 +228,7 @@ class BotManager(object):
             self.monitors[monitor_wsocket.team_name].remove(monitor_wsocket)
 
     def notify_monitors(self, team_name):
-        """ Update team monitors """
+        """Update team monitors"""
         if team_name in self.monitors and 0 < len(self.monitors[team_name]):
             logging.debug("Sending update to %s" % team_name)
             bots = self.get_bots(team_name)
@@ -217,17 +236,17 @@ class BotManager(object):
                 monitor.update(bots)
 
     def get_bots(self, team):
-        """ Get info on boxes for a team """
+        """Get info on boxes for a team"""
         bots = self.botdb.query(Bot).filter_by(team_name=str(team)).all()
         return [bot.to_dict() for bot in bots]
 
     def get_all_bots(self):
-        """ Get info on all bots"""
+        """Get info on all bots"""
         bots = self.botdb.query(Bot).all()
         return [bot.to_dict() for bot in bots]
 
     def add_rewards(self, team, reward):
-        """ Add rewards to bot records """
+        """Add rewards to bot records"""
         bots = self.botdb.query(Bot).filter_by(team_name=str(team)).all()
         for bot in bots:
             bot.total_reward += reward
@@ -240,7 +259,7 @@ class BotManager(object):
 
 
 def ping_bots():
-    """ Ping all websockets in database """
+    """Ping all websockets in database"""
     bot_manager = BotManager.instance()
     logging.debug("Pinging open botnet websockets")
 

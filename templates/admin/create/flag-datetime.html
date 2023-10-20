@@ -50,7 +50,7 @@
                                     data-original-title="{{_('Box')}}"
                                     data-content="{{_('This is the box the flag is located on.')}}">
                                 <option value=""></option>
-                                {% for thebox in Box.all() %}
+                                {% for thebox in sorted(Box.all()) %}
                                 <option value="{{ thebox.uuid }}"{% if box and box.uuid == thebox.uuid %} selected{% end %}>
                                     {{ thebox.name }}{% if thebox.corporation.name != "" %} ({{ thebox.corporation.name }}){% end %}
                                 </option>
@@ -70,11 +70,11 @@
                     <div class="control-group">
                         <label class="control-label" for="description">{{_("Description")}}</label>
                         <div class="controls">
-                            <textarea required class="toolbar" id="description" name="description" maxlength="1024" rows="5" type="text" placeholder="{{_('Description')}}"
+                            <textarea required class="toolbar" id="description" name="description" maxlength="4096" rows="5" type="text" placeholder="{{_('Description')}}"
                                     rel="popover"
                                     data-original-title="Description"
                                     data-html="true"
-                                    data-content="{{_('This is the description')}} [Max: 1024 {{_('Characters')}}].<br/><br/>{{_('Supports')}} Markdown (GitHub Style)">
+                                    data-content="{{_('This is the description')}} [Max: 4096 {{_('Characters')}}].<br/><br/>{{_('Supports')}} Markdown (GitHub Style)">
                             </textarea>
                         </div>
                     </div>

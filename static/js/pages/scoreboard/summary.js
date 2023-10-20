@@ -55,8 +55,8 @@ $(document).ready(function() {
                 game_data = jQuery.parseJSON(event.data);
                 
                 /* Update Summary Table */
-                let count = $("#paramaters").data("count");
-                let page = $("#paramaters").data("page");
+                let count = $("#parameters").data("count");
+                let page = $("#parameters").data("page");
                 $.get("/scoreboard/ajax/summary?count=" + count + "&page=" + page, function(table_data) {
                     highlight_table = highlights(table_data);
                     $("#summary_loading").hide();
@@ -78,6 +78,9 @@ $(document).ready(function() {
                     $("a[id^=team-details-button]").click(function() {
                         window.location = "/teams#" + $(this).data("uuid");
                     });
+                    $("a[id^=user-details-button]").click(function() {
+                        window.location = "/user?id=" + $(this).data("uuid");
+                    }); 
                 });
                 if ($("#mvp_table").length > 0) {
                     /* Update MVP Table */
@@ -209,20 +212,23 @@ function padDigits(number, digits) {
 }
   
 function setTimer(distance, id) {
-    
     // Update the count down every 1 second
     var x = setInterval(function() {
         // Time calculations for days, hours, minutes and seconds
+        var days = Math.max(0,Math.floor((distance) / (1000 * 60 * 60 * 24)));
         var hours = Math.max(0,Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
         var minutes = Math.max(0,Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)));
         var seconds = Math.max(0,Math.floor((distance % (1000 * 60)) / 1000));
 
-        // Display the result in the element with id="demo"
-        var hourval = "";
+        // Display the result in the element with id="timercount"
+        var timercount = padDigits(minutes,2) + "m " + padDigits(seconds,2) + "s ";
         if (hours > 0) {
-            hourval = hours + "h ";
+            timercount = hours + "h " + timercount;
         }
-        $("#timercount" + id).text(hourval + padDigits(minutes,2) + "m " + padDigits(seconds,2) + "s ");
+        if (days > 0) {
+            timercount = days + "d " + timercount;
+        }
+        $("#timercount" + id).text(timercount);
 
         // If the count down is finished, write some text
         if (distance <= 0) {

@@ -26,9 +26,12 @@ import json
 import logging
 import time
 
-from models import dbsession
+from threading import Thread
+from sqlalchemy.orm import scoped_session
+from models import dbsession, session_maker
 from models.Team import Team
 from models.Box import Box
+from models.User import User
 from models.Flag import Flag
 from models.Hint import Hint
 from models.GameLevel import GameLevel
@@ -36,29 +39,33 @@ from libs.BotManager import BotManager
 from libs.EventManager import EventManager
 from tornado.options import options
 from builtins import object, str
+from collections import OrderedDict
 
 
 class Scoreboard(object):
-    """ Manages websocket connections (mostly thread safe) """
+    """Manages websocket connections (mostly thread safe)"""
 
     @classmethod
-    def now(self, app):
-        """ Returns the current game state """
+    def now(cls, app):
+        """Returns the current game state"""
         return json.dumps(app.settings["scoreboard_state"].get("teams"))
 
     @classmethod
-    def update_gamestate(self, app):
+    def update_gamestate(cls, app):
         game_levels = GameLevel.all()
+        teams = Team.ranks()
+        users = User.ranks()
+        bots = BotManager.instance().count_all_teams()
         game_state = {
-            "teams": {},
+            "teams": OrderedDict(),
+            "users": OrderedDict(),
             "levels": {},
             "boxes": {},
             "hint_count": len(Hint.all()),
             "flag_count": len(Flag.all()),
-            "box_count": len(Box.all()),
+            "box_count": len(Box.unlocked()),
             "level_count": len(game_levels),
         }
-        teams = Team.ranks()
         for team in teams:
             millis = int(round(time.time() * 1000))
             game_state["teams"][team.name] = {
@@ -67,33 +74,41 @@ class Scoreboard(object):
                 "game_levels": [str(lvl) for lvl in team.game_levels],
                 "members_count": len(team.members),
                 "hints_count": len(team.hints),
-                "bot_count": BotManager.instance().count_by_team(team.name),
+                "bot_count": bots[team.uuid],
                 "money": team.money,
+                "users": [user.uuid for user in team.members],
             }
 
             highlights = {"money": 0, "flag": 0, "bot": 0, "hint": 0}
             for item in highlights:
                 value = team.get_score(item)
                 game_state["teams"][team.name][item] = value
-                game_history = app.settings["scoreboard_history"]
-                if team.name in game_history:
-                    prev = game_history[team.name][item]
+                scoreboard_history = app.settings["scoreboard_history"]
+                if team.name in scoreboard_history:
+                    prev = scoreboard_history[team.name][item]
                     if prev < value:
                         highlights[item] = millis
                     else:
-                        highlights[item] = game_history[team.name]["highlights"][item]
+                        highlights[item] = scoreboard_history[team.name]["highlights"][
+                            item
+                        ]
             highlights["now"] = millis
             game_state["teams"][team.name]["highlights"] = highlights
             app.settings["scoreboard_history"][team.name] = game_state["teams"].get(
                 team.name
             )
+        for idx, user in enumerate(users):
+            if idx < options.mvp_max:
+                game_state["users"][user.handle] = {"money": user.money}
+            else:
+                break
         for level in game_levels:
             game_state["levels"][level.name] = {
                 "type": level.type,
                 "number": level.number,
                 "teams": {},
                 "boxes": {},
-                "box_count": len(level.boxes),
+                "box_count": len(level.unlocked_boxes()),
                 "flag_count": len(level.flags),
             }
             for team in teams:
@@ -101,9 +116,10 @@ class Scoreboard(object):
                     "lvl_count": len(team.level_flags(level.number)),
                     "lvl_unlock": level in team.game_levels,
                 }
-            for box in level.boxes:
+            for box in sorted(level.unlocked_boxes()):
                 game_state["levels"][level.name]["boxes"][box.uuid] = {
                     "name": box.name,
+                    "locked": box.locked,
                     "teams": {},
                     "flags": {},
                     "flag_count": len(box.flags),
@@ -112,16 +128,15 @@ class Scoreboard(object):
                     game_state["levels"][level.name]["boxes"][box.uuid]["teams"][
                         team.name
                     ] = {"box_count": len(team.box_flags(box))}
-                for flag in box.flags:
+                for flag in sorted(box.flags):
                     game_state["levels"][level.name]["boxes"][box.uuid]["flags"][
                         flag.uuid
                     ] = {"name": flag.name}
         app.settings["scoreboard_state"] = game_state
-        return len(teams)
 
 
 def score_bots():
-    """ Award money for botnets """
+    """Award money for botnets"""
     logging.info("Scoring botnets, please wait ...")
     bot_manager = BotManager.instance()
     event_manager = EventManager.instance()
@@ -151,7 +166,7 @@ def score_bots():
                 )
                 bot_manager.add_rewards(team.name, options.bot_reward)
                 bot_manager.notify_monitors(team.name)
-                team.money += reward
+                team.set_score("bot", reward + team.money)
                 dbsession.add(team)
                 dbsession.flush()
                 event_manager.bot_scored(team, message)

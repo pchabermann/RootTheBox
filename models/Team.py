@@ -28,11 +28,14 @@ import imghdr
 import io
 
 from uuid import uuid4
-from sqlalchemy import Column
+from datetime import datetime
+from sqlalchemy import Column, desc
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.types import Integer, Unicode, String
 from models import dbsession
 from models.BaseModels import DatabaseObject
+from models.User import User
+from models.GameHistory import GameHistory
 from models.Relationships import (
     team_to_box,
     team_to_item,
@@ -55,7 +58,7 @@ from builtins import str
 
 class Team(DatabaseObject):
 
-    """ Team definition """
+    """Team definition"""
 
     uuid = Column(String(36), unique=True, nullable=False, default=lambda: str(uuid4()))
     _name = Column(Unicode(24), unique=True, nullable=False)
@@ -109,36 +112,42 @@ class Team(DatabaseObject):
         "GameLevel", secondary=team_to_game_level, back_populates="teams", lazy="select"
     )
 
+    game_history = relationship(
+        "GameHistory",
+        backref=backref("team", lazy="select"),
+        cascade="all,delete,delete-orphan",
+    )
+
     @classmethod
     def all(cls):
-        """ Returns a list of all objects in the database """
+        """Returns a list of all objects in the database"""
         return dbsession.query(cls).all()
 
     @classmethod
     def by_id(cls, _id):
-        """ Returns a the object with id of _id """
+        """Returns a the object with id of _id"""
         return dbsession.query(cls).filter_by(id=_id).first()
 
     @classmethod
     def by_uuid(cls, _uuid):
-        """ Return and object based on a uuid """
+        """Return and object based on a uuid"""
         return dbsession.query(cls).filter_by(uuid=_uuid).first()
 
     @classmethod
     def by_name(cls, name):
-        """ Return the team object based on "team_name" """
+        """Return the team object based on "team_name" """
         return dbsession.query(cls).filter_by(_name=str(name)).first()
 
     @classmethod
     def by_code(cls, code):
-        """ Return the team object based on the _code """
+        """Return the team object based on the _code"""
         return dbsession.query(cls).filter_by(_code=code).first()
 
     @classmethod
     def ranks(cls):
-        """ Returns a list of unlocked objects in the database """
+        """Returns a list of unlocked objects in the database"""
         ranked = []
-        for team in sorted(dbsession.query(cls).all()):
+        for team in sorted(dbsession.query(cls).order_by(desc(cls.money)).all()):
             if not team.locked:
                 ranked.append(team)
         return ranked
@@ -151,16 +160,43 @@ class Team(DatabaseObject):
     def name(self):
         return self._name
 
-    def get_score(self, item):
-        if item == "money":
+    def get_score(self, _type):
+        if _type == "money":
             return self.money
-        elif item == "flag":
+        elif _type == "flag":
             return len(self.flags)
-        elif item == "hint":
+        elif _type == "hint":
             return len(self.hints)
-        elif item == "bot":
+        elif _type == "bot":
             return self.bot_count
         return 0
+
+    def set_score(self, _type, _money):
+        score_update = GameHistory(type=_type, value=_money)
+        self.game_history.append(score_update)
+        self.money = _money
+
+    def set_bot(self, botcount):
+        bot_update = GameHistory(type="bot_count", value=botcount)
+        self.game_history.append(bot_update)
+
+    def add_flag(self, flag):
+        self.flags.append(flag)
+        add_flag = GameHistory(type="flag_count", value=len(self.flags))
+        self.game_history.append(add_flag)
+
+    def get_history(self, _type=None):
+        history = []
+        for item in self.game_history:
+            if _type == "bots":
+                if item.type == "bot_count":
+                    history.append(item.to_dict())
+            elif _type == "flags":
+                if item.type == "flag_count":
+                    history.append(item.to_dict())
+            elif item.type != "flag_count" and item.type != "bot_count":
+                history.append(item.to_dict())
+        return history
 
     @name.setter
     def name(self, value):
@@ -253,15 +289,21 @@ class Team(DatabaseObject):
 
     @property
     def levels(self):
-        """ Sorted game_levels """
+        """Sorted game_levels"""
         return sorted(self.game_levels)
 
+    def last_scored(self):
+        for item in reversed(self.game_history):
+            if item.type == "flag_count":
+                return item.created.strftime("%s")
+        return datetime.now().strftime("%s")
+
     def level_flags(self, lvl):
-        """ Given a level number return all flags captured for that level """
+        """Given a level number return all flags captured for that level"""
         return [flag for flag in self.flags if flag.game_level.number == lvl]
 
     def box_flags(self, box):
-        """ Given a box return all flags captured for that box """
+        """Given a box return all flags captured for that box"""
         return [flag for flag in self.flags if flag.box == box]
 
     @property
@@ -270,12 +312,12 @@ class Team(DatabaseObject):
         return bot_manager.count_by_team_uuid(self.uuid)
 
     def file_by_file_name(self, file_name):
-        """ Return file object based on file_name """
+        """Return file object based on file_name"""
         ls = self.files.filter_by(file_name=file_name)
         return ls[0] if 0 < len(ls) else None
 
     def to_dict(self):
-        """ Use for JSON related tasks; return public data only """
+        """Use for JSON related tasks; return public data only"""
         return {
             "uuid": self.uuid,
             "name": self.name,
@@ -308,19 +350,23 @@ class Team(DatabaseObject):
         return not self.__eq__(other)
 
     def __cmp__(self, other):
-        """ Compare based on the config option rank_by """
+        """Compare based on the config option rank_by"""
         if options.rank_by.lower() != "money":
-            """ flags ▲, money ▲, hints ▼ """
+            """flags ▲, money ▲, hints ▼, time ▼"""
             this, that = len(self.flags), len(other.flags)
             if this == that:
                 this, that = self.money, other.money
             if this == that:
                 this, that = len(other.hints), len(self.hints)
+            if this == that:
+                this, that = other.last_scored(), self.last_scored()
         else:
-            """ money ▲, hints ▼, flags ▲ """
+            """money ▲, hints ▼, time ▼, flags ▲"""
             this, that = self.money, other.money
             if this == that:
                 this, that = len(other.hints), len(self.hints)
+            if this == that:
+                this, that = other.last_scored(), self.last_scored()
             if this == that:
                 this, that = len(self.flags), len(other.flags)
         if this < that:

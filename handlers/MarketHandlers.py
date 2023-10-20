@@ -35,13 +35,13 @@ from libs.SecurityDecorators import authenticated, use_black_market, game_starte
 
 class MarketViewHandler(BaseHandler):
 
-    """ Renders views of items in the market """
+    """Renders views of items in the market"""
 
     @authenticated
     @game_started
     @use_black_market
     def get(self, *args, **kwargs):
-        """ Renders the main table """
+        """Renders the main table"""
         user = self.get_current_user()
         self.render("market/view.html", user=user, errors=None)
 
@@ -49,13 +49,19 @@ class MarketViewHandler(BaseHandler):
     @game_started
     @use_black_market
     def post(self, *args, **kwargs):
-        """ Called to purchase an item """
+        """Called to purchase an item"""
         uuid = self.get_argument("uuid", "")
         item = MarketItem.by_uuid(uuid)
         if item is not None:
             user = self.get_current_user()
             team = Team.by_id(user.team.id)  # Refresh object
-            if user.has_item(item.name):
+            if item.name not in options.allowed_market_items:
+                self.render(
+                    "market/view.html",
+                    user=self.get_current_user(),
+                    errors=["Item is not allowed."],
+                )
+            elif user.has_item(item.name):
                 self.render(
                     "market/view.html",
                     user=user,
@@ -84,8 +90,8 @@ class MarketViewHandler(BaseHandler):
             )
 
     def purchase_item(self, team, item):
-        """ Conducts the actual purchase of an item """
-        team.money -= abs(item.price)
+        """Conducts the actual purchase of an item"""
+        team.set_score("purchase_market", team.money - abs(item.price))
         team.items.append(item)
         self.dbsession.add(team)
         self.dbsession.commit()
@@ -94,16 +100,18 @@ class MarketViewHandler(BaseHandler):
 
 class MarketDetailsHandler(BaseHandler):
 
-    """ Renders views of items in the market """
+    """Renders views of items in the market"""
 
     @authenticated
     @use_black_market
     def get(self, *args, **kwargs):
-        """ Get details on an item """
+        """Get details on an item"""
         uuid = self.get_argument("uuid", "")
         item = MarketItem.by_uuid(uuid)
         if item is None:
             self.write({"Error": "Item does not exist."})
+        elif item.name not in options.allowed_market_items:
+            self.write({"Error": "Item is not allowed."})
         else:
             self.write(item.to_dict())
         self.finish()

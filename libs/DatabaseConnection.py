@@ -58,7 +58,7 @@ class DatabaseConnection(object):
         self.ssl_ca = ssl_ca
 
     def __str__(self):
-        """ Construct the database connection string """
+        """Construct the database connection string"""
         if self.dialect == "sqlite":
             db_conn = self._sqlite()
         elif self.dialect.startswith("postgres"):
@@ -102,13 +102,25 @@ class DatabaseConnection(object):
         logging.debug("Configured to use SQLite for a database")
         db_name = self.database
         if not len(db_name):
-            db_name = "rtb"
+            db_name = "rootthebox.db"
         if not db_name.endswith(".db"):
-            db_name =  "%s.db" % db_name
-        return "sqlite:///%s" % db_name
+            db_name = "%s.db" % db_name
+        if os.path.exists("files/%s" % db_name):
+            path = "sqlite:///files/%s" % db_name
+            logging.debug("Found rootthebox database at: %s" % path)
+        elif os.path.exists(db_name):
+            path = "sqlite:///%s" % db_name
+            logging.debug("Found rootthebox database at: %s" % path)
+        else:
+            if "files" in db_name:
+                path = "sqlite:///%s" % db_name
+            else:
+                path = "sqlite:///files/%s" % db_name
+            logging.debug("Created rootthebox database at: %s" % path)
+        return path
 
     def _mysql(self):
-        """ Configure db_connection for MySQL """
+        """Configure db_connection for MySQL"""
         logging.debug("Configured to use MySQL for a database")
         db_server, db_name, db_user, db_password = self._db_credentials()
         db_charset = "utf8mb4"
@@ -140,7 +152,7 @@ class DatabaseConnection(object):
             return __mysqlconnector
         else:
             logging.fatal(
-                "Cannot connect to database with any available driver. Verify correct username & password in rootthebox.cfg and db dependecies."
+                "Cannot connect to database with any available driver. Verify correct username & password in rootthebox.cfg and db dependencies."
             )
             os._exit(1)
 
@@ -159,7 +171,7 @@ class DatabaseConnection(object):
             return False
 
     def _db_credentials(self):
-        """ Pull db creds and return them url encoded """
+        """Pull db creds and return them url encoded"""
         if self.password == "" or self.password == "RUNTIME":
             sys.stdout.write(PROMPT + "Database password: ")
             sys.stdout.flush()

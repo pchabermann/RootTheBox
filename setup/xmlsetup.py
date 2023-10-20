@@ -25,6 +25,7 @@ It reads an XML file(s) and calls the API based on the it's contents.
 
 
 import logging
+import binascii
 import defusedxml.cElementTree as ET
 from os import urandom, path, listdir
 from tornado.options import options
@@ -40,13 +41,13 @@ from base64 import b64decode
 
 
 def get_child_by_tag(elem, tag_name):
-    """ Return child elements with a given tag """
+    """Return child elements with a given tag"""
     tags = [child for child in elem if child.tag == tag_name]
     return tags[0] if 0 < len(tags) else None
 
 
 def get_child_text(elem, tag_name, default=""):
-    """ Shorthand access to .text data """
+    """Shorthand access to .text data"""
     try:
         text = get_child_by_tag(elem, tag_name).text
         if text == "None" or text is None:
@@ -58,7 +59,7 @@ def get_child_text(elem, tag_name, default=""):
 
 
 def create_categories(categories):
-    """ Create Category objects based on XML data """
+    """Create Category objects based on XML data"""
     if categories is None:
         return
     logging.info("Found %s categories" % categories.get("count"))
@@ -77,7 +78,7 @@ def create_categories(categories):
 
 
 def create_levels(levels):
-    """ Create GameLevel objects based on XML data """
+    """Create GameLevel objects based on XML data"""
     if levels is None:
         return
     logging.info("Found %s game level(s)" % levels.get("count"))
@@ -114,7 +115,7 @@ def create_levels(levels):
 
 
 def create_hints(parent, box, flag=None):
-    """ Create flag objects for a box """
+    """Create flag objects for a box"""
     if parent and box:
         logging.info("Found %s hint(s)" % parent.get("count"))
         for index, hint_elem in enumerate(parent):
@@ -131,7 +132,7 @@ def create_hints(parent, box, flag=None):
 
 
 def create_flags(parent, box):
-    """ Create flag objects for a box """
+    """Create flag objects for a box"""
     if parent and box:
         logging.info("Found %s flag(s)" % parent.get("count"))
         flag_dependency = []
@@ -146,6 +147,7 @@ def create_flags(parent, box):
                 flag.capture_message = get_child_text(flag_elem, "capture_message")
                 flag.type = flag_elem.get("type", "static")
                 flag.order = get_child_text(flag_elem, "order", None)
+                flag.locked = get_child_text(flag_elem, "locked", 0)
                 if flag.type == "file":
                     add_attachments(
                         get_child_by_tag(flag_elem, "flag_attachments"), flag
@@ -162,33 +164,33 @@ def create_flags(parent, box):
                 logging.exception("Failed to import flag #%d" % (index + 1))
         if len(flag_dependency) > 0:
             for item in flag_dependency:
-                for flag in box.flags:
+                for flag in sorted(box.flags):
                     if item["name"] == flag.name:
                         item["flag"].lock_id = flag.id
                         continue
 
 
 def add_attachments(parent, flag):
-    """ Add uploaded files as attachments to flags """
+    """Add uploaded files as attachments to flags"""
     if flag is None:
         return
     logging.info("Found %s attachment(s)" % parent.get("count"))
-    for index, attachement_elem in enumerate(parent):
+    for index, attachment_elem in enumerate(parent):
         try:
             flag_attachment = FlagAttachment(
-                file_name=get_child_text(attachement_elem, "flag_name")
+                file_name=get_child_text(attachment_elem, "flag_name")
             )
             flag_attachment.data = bytearray(
-                b64decode(get_child_text(attachement_elem, "data"))
+                b64decode(get_child_text(attachment_elem, "data"))
             )
             flag.flag_attachments.append(flag_attachment)
             dbsession.add(flag_attachment)
         except:
-            logging.exception("Failed to import attachement #%d in flag" % (index + 1))
+            logging.exception("Failed to import attachment #%d in flag" % (index + 1))
 
 
 def create_choices(parent, flag):
-    """ Create multiple choice flag objects """
+    """Create multiple choice flag objects"""
     if flag is None:
         return
     logging.info("Found %s choice(s)" % parent.get("count"))
@@ -202,7 +204,7 @@ def create_choices(parent, flag):
 
 
 def create_boxes(parent, corporation):
-    """ Create boxes for a corporation """
+    """Create boxes for a corporation"""
     if corporation is None:
         return
     logging.info("Found %s boxes" % parent.get("count"))
@@ -224,13 +226,15 @@ def create_boxes(parent, corporation):
                 box.description = get_child_text(box_elem, "description")
                 box.capture_message = get_child_text(box_elem, "capture_message")
                 box.operating_system = get_child_text(box_elem, "operatingsystem")
+                box.locked = get_child_text(box_elem, "locked", 0)
                 box.value = get_child_text(box_elem, "value", "0")
+                box.order = get_child_text(box_elem, "order", None)
                 if get_child_text(box_elem, "avatar", "none") != "none":
                     box.avatar = bytearray(
                         b64decode(get_child_text(box_elem, "avatar"))
                     )
                 box.garbage = get_child_text(
-                    box_elem, "garbage", encode(urandom(16), "hex")
+                    box_elem, "garbage", binascii.hexlify(urandom(16)).decode()
                 )
                 category = get_child_text(box_elem, "category")
                 if category:
@@ -246,7 +250,7 @@ def create_boxes(parent, corporation):
 
 
 def create_corps(corps):
-    """ Create Corporation objects based on XML data """
+    """Create Corporation objects based on XML data"""
     if corps is None:
         return
     logging.info("Found %s corporation(s)" % corps.get("count"))
@@ -261,11 +265,11 @@ def create_corps(corps):
                 corporation = Corporation.by_name(corporation.name)
             create_boxes(get_child_by_tag(corp_elem, "boxes"), corporation)
         except BaseException as e:
-            logging.exception("Faild to create corporation #%d (%s)" % (index + 1, e))
+            logging.exception("Failed to create corporation #%d (%s)" % (index + 1, e))
 
 
 def update_configuration(config):
-    """ Update Configuration options based on XML data """
+    """Update Configuration options based on XML data"""
     if config is None:
         return
     """ Backup configuration """
@@ -298,12 +302,12 @@ def update_configuration(config):
                         )
                     )
         except BaseException as e:
-            logging.exception("Faild to update configuration (%s)" % e)
+            logging.exception("Failed to update configuration (%s)" % e)
     save_config()
 
 
 def _xml_file_import(filename):
-    """ Parse and import a single XML file """
+    """Parse and import a single XML file"""
     logging.debug("Processing: %s" % filename)
     try:
         tree = ET.parse(filename)
@@ -328,7 +332,7 @@ def _xml_file_import(filename):
 
 
 def import_xml(target):
-    """ Import XML file or directory of files """
+    """Import XML file or directory of files"""
     target = path.abspath(path.expanduser(target))
     if not path.exists(target):
         logging.error("Error: Target does not exist (%s) " % target)

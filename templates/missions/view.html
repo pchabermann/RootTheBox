@@ -41,7 +41,7 @@
 {% else %}
     {% set corps = [""] %}
 {% end %}
-    <!-- Visable -->
+    <!-- Visible -->
     <div class="container">
         <h1>{{ _("Missions") }}</h1>
         <br />
@@ -59,13 +59,13 @@
                 {% continue %}
             {% end %}
         {% for index, level in enumerate(GameLevel.all()) %}
-            {% if len(level.boxes) > 0 %}
+            {% if len(level.unlocked_boxes()) > 0 %}
                 {% if options.group_by_corp %}
                     <h2>{{ corp.name }}&nbsp;</h2>
                     {% if corp.description %}<h4 class="levelheader">{{ corp.description }}</h4>{% end %}
                 {% end %}
 
-            {% set has_level = not team or level.type == 'none' or level in team.game_levels %}
+            {% set has_level = (not team or level.type == 'none' or level in team.game_levels) and level.type != 'locked'  %}
             {% if not (level.type == 'hidden' and not has_level) %}
             <div class="well">
                 {% if len(GameLevel.all()) > 1 %}
@@ -93,7 +93,7 @@
                 {% if has_level %}
                     <div class="container">
                         {% set boxes = [] %}
-                        {% for box in level.boxes %}
+                        {% for box in sorted(level.unlocked_boxes()) %}
                             <!-- Only show boxes that have flags -->
                             {% if len(box.flags) > 0 and not box.locked %}
                                 {% if options.group_by_corp %}
@@ -127,7 +127,7 @@
                                             </h5>
                                             {% if team %}
                                                 {% set flagcount=0 %}
-                                                {% for index, flag in enumerate(box.flags) %}
+                                                {% for index, flag in enumerate(sorted(box.flags)) %}
                                                     {% if flag in team.flags %}
                                                         {% set flagcount += 1 %}
                                                     {% end %}
@@ -243,10 +243,16 @@
                     {% elif level._type == "progress" %}
                         {{ _("This level will unlock at") }} {{ level.buyout }}% {{ _("completion of prior level") }}
                     {% end %}
+                    {% if level.type != "locked" %}
                     <hr>
                     <strong>
                         {{ _("You do not have access to this level yet.") }}
                     </strong>
+                    {% else %}
+                    <strong>
+                        {{ _("This level is currently locked by the administrator.") }}
+                    </strong>
+                    {% end %}
                     <br />
                     <br />
                 {% end %}

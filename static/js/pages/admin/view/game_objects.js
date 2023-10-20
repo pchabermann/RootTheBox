@@ -36,6 +36,8 @@ function getDetails(obj, uuid) {
                 }
             } else if (obj === "box" && key === "corporation") {
                 $('#edit-box-corporation option[value=' + value + ']').prop('selected',true);
+            } else if (obj === "box" && key === "game_level") {
+                $('#edit-box-game-level option[value=' + value + ']').prop('selected',true);
             } else if (obj === "box" && key === "flag_submission_type") {
                 if (value === "CLASSIC") {
                     $('#box-flag-submission-type-classic').click();
@@ -157,23 +159,6 @@ function testToken() {
     }
 }
 
-function adjustNavigation() {
-    if ($("footer").position().top > $("#navWrapper").outerHeight(true)) {
-        let topOffset = 60;
-        $("#navWrapper").css({top: topOffset, bottom: "auto"});
-    } else {
-        let bottomOffset = 20;
-        let wrapperpos = $("#navWrapper").outerHeight(true) + bottomOffset;
-        let footerpos = $("footer").position().top + $(document).scrollTop()
-        if (footerpos < wrapperpos){
-            let floatingOffset = footerpos - wrapperpos + 10
-            $("#navWrapper").css({top: "auto", bottom: floatingOffset});        
-        } else {
-            $("#navWrapper").css({top: "auto", bottom: bottomOffset});     
-        }
-    }        
-}
-
 /* Add click events */
 $(document).ready(function() {
     var reader = new commonmark.Parser({smart: true});
@@ -223,6 +208,16 @@ $(document).ready(function() {
     $("a[id^=lock-box-button]").click(function() {
         $("#lock-box-uuid").val($(this).data("uuid"));
         $("#lock-box-form").submit();
+    });
+
+    $("a[id^=lock-corp-button]").click(function() {
+        $("#lock-corp-uuid").val($(this).data("uuid"));
+        $("#lock-corp-form").submit();
+    });
+    
+    $("a[id^=lock-flag-button]").click(function() {
+        $("#lock-flag-uuid").val($(this).data("uuid"));
+        $("#lock-flag-form").submit();
     });
 
     /* IP Address */
@@ -417,13 +412,4 @@ $(document).ready(function() {
         helper: fixHelperModified,
         stop: updateIndex
     }).disableSelection();
-
-    $(document).on('scroll', function(){
-        adjustNavigation();
-    })
-
-    $(window).on('resize', function() {
-        adjustNavigation();
-    });
-
 });

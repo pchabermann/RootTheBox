@@ -23,7 +23,7 @@ from models.BaseModels import DatabaseObject
 
 
 def create_tables(sqla_engine, sqla_metadata, echo=False):
-    """ Create all the tables """
+    """Create all the tables"""
     setattr(sqla_engine, "echo", echo)
     sqla_metadata.create_all(sqla_engine)
 
@@ -56,8 +56,6 @@ from models.Theme import Theme, ThemeFile
 from models.RegistrationToken import RegistrationToken
 from models.MarketItem import MarketItem
 from models.IpAddress import IpAddress
-from models.Snapshot import Snapshot
-from models.SnapshotTeam import SnapshotTeam
 from models.SourceCode import SourceCode
 from models.Swat import Swat
 from models.Hint import Hint
