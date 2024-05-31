@@ -25,12 +25,11 @@ any authentication) with the exception of error handlers and the scoreboard
 """
 
 
-import logging
-import re
-import smtplib
-import random
-import string
 import json
+import logging
+import random
+import re
+import string
 
 try:
     from urllib.parse import urlencode
@@ -40,32 +39,41 @@ try:
     import urllib.request as urlrequest
 except ImportError:
     import urllib2 as urlrequest
-from os import urandom
-from netaddr import IPAddress
-from libs.Identicon import identicon
-from libs.SecurityDecorators import blacklist_ips
-from libs.ValidationError import ValidationError
-from libs.XSSImageCheck import filter_avatars
-from libs.StringCoding import encode, decode
-from libs.EmailHelpers import email_rfc2822_compliance
-from libs.WebhookHelpers import send_user_validated_webhook
-from base64 import urlsafe_b64encode, urlsafe_b64decode, b64encode
+from base64 import b64encode, urlsafe_b64decode, urlsafe_b64encode
 from builtins import str
-from models import azuread_app
-from models.Team import Team
-from models.Theme import Theme
-from models.PasswordToken import PasswordToken
-from models.RegistrationToken import RegistrationToken
-from models.EmailToken import EmailToken
-from models.GameLevel import GameLevel
-from models.User import User, ADMIN_PERMISSION
-from models.Permission import Permission
-from handlers.BaseHandlers import BaseHandler
-from hashlib import sha256
 from datetime import datetime
+from hashlib import sha256
+from os import urandom
+
+from msal import ConfidentialClientApplication
+from netaddr import IPAddress
 from pbkdf2 import PBKDF2
 from tornado.options import options
-from msal import ConfidentialClientApplication
+
+from handlers.BaseHandlers import BaseHandler
+from libs.EmailHelpers import (
+    create_email_headers,
+    get_email_message,
+    send_email_message,
+)
+from libs.Identicon import identicon
+from libs.SecurityDecorators import blacklist_ips
+from libs.StringCoding import decode, encode
+from libs.ValidationError import ValidationError
+from libs.WebhookHelpers import (
+    send_user_registered_webhook,
+    send_user_validated_webhook,
+)
+from libs.XSSImageCheck import filter_avatars
+from models import azuread_app
+from models.EmailToken import EmailToken
+from models.GameLevel import GameLevel
+from models.PasswordToken import PasswordToken
+from models.Permission import Permission
+from models.RegistrationToken import RegistrationToken
+from models.Team import Team
+from models.Theme import Theme
+from models.User import ADMIN_PERMISSION, User
 
 
 class HomePageHandler(BaseHandler):
@@ -414,6 +422,7 @@ class RegistrationHandler(BaseHandler):
                     self.check_regtoken()
                 user = self.create_user()
                 validate = options.require_email and options.validate_email
+                send_user_registered_webhook(user)
                 self.render("public/successful_reg.html", user=user, validate=validate)
         except ValidationError as error:
             self.render(
@@ -488,7 +497,7 @@ class RegistrationHandler(BaseHandler):
         ):
             raise ValidationError("Invalid Team Motto format")
         if (
-            User.by_handle(self.get_argument("handle", ""), case_sensitive=False)
+            User.by_handle(self.get_argument("handle", ""))
             is not None
         ):
             raise ValidationError("This handle is already registered")
@@ -575,7 +584,7 @@ class RegistrationHandler(BaseHandler):
 
     def get_team(self):
         """Create a team object, or pull the existing one"""
-        code = self.get_argument("team-code", "")
+        code = self.get_argument("team-code", "").strip()
         if len(code) > 0:
             team = Team.by_code(code)
             if not team:
@@ -646,34 +655,9 @@ class RegistrationHandler(BaseHandler):
             emailtoken = EmailToken()
             emailtoken.user_id = user.id
             emailtoken.value = sha256(email_token).hexdigest()
-            receivers = [user.email]
-            message = email_rfc2822_compliance(
-                self.create_validate_message(user, email_token)
-            )
-            try:
-                if options.mail_port == 465:
-                    smtpObj = smtplib.SMTP_SSL(
-                        options.mail_host, port=options.mail_port, timeout=5
-                    )
-                else:
-                    smtpObj = smtplib.SMTP(
-                        options.mail_host, port=options.mail_port, timeout=5
-                    )
-                    smtpObj.starttls()
-            except Exception as e:
-                logging.warning("SMTP Failed with Connection issue (%s)." % e)
-                return
-            smtpObj.set_debuglevel(False)
-            try:
-                try:
-                    smtpObj.login(options.mail_username, options.mail_password)
-                except smtplib.SMTPNotSupportedError as e:
-                    logging.warning(
-                        "SMTP Auth issue (%s). Attempting to send anyway." % e
-                    )
-                smtpObj.sendmail(options.mail_sender, receivers, message)
-            finally:
-                smtpObj.quit()
+            receivers = [user.email]            
+            message = self.create_validate_message(user, email_token)       
+            send_email_message(receivers, message)                 
             if not len(options.mail_host) > 0:
                 logging.info(
                     "Email validation failed: No Mail Host in Configuration. Skipping Validation."
@@ -717,16 +701,7 @@ class RegistrationHandler(BaseHandler):
             self.request.headers.get("X-Real-IP")
             or self.request.headers.get("X-Forwarded-For")
             or self.request.remote_ip
-        )
-        header = []
-        header.append("Subject: %s Email Validation" % options.game_name)
-        header.append("From: %s <%s>" % (options.game_name, options.mail_sender))
-        header.append("To: %s <%s>" % (user.name, user.email))
-        header.append("MIME-Version: 1.0")
-        header.append('Content-Type: text/html; charset="UTF-8"')
-        header.append("Content-Transfer-Encoding: BASE64")
-        header.append("\r\n")
-        header.append("")
+        )        
         f = open("templates/public/valid_email.html", "r")
         template = (
             f.read()
@@ -738,11 +713,7 @@ class RegistrationHandler(BaseHandler):
             .replace("https://example.com", origin)
         )
         f.close()
-        try:
-            email_msg = "\n".join(header) + b64encode(template)
-        except:
-            email_msg = "\n".join(header) + decode(b64encode(encode(template)))
-        return email_msg
+        return get_email_message(create_email_headers(user, "Email Validation"), template)        
 
 
 class JoinTeamHandler(BaseHandler):
@@ -767,7 +738,7 @@ class JoinTeamHandler(BaseHandler):
             if self.application.settings["suspend_registration"]:
                 self.render("public/jointeam.html", errors=None, suspend=True)
             else:
-                code = self.get_argument("team-code", "")
+                code = self.get_argument("team-code", "").strip()
                 code = self.validate_teamcode(code)
                 login_hint = self.get_argument("login-hint", None)
                 if len(login_hint) == 0:
@@ -839,22 +810,8 @@ class ForgotPasswordHandler(BaseHandler):
             self.dbsession.add(passtoken)
             self.dbsession.commit()
             receivers = [user.email]
-            message = email_rfc2822_compliance(
-                self.create_reset_message(user, reset_token)
-            )
-            smtpObj = smtplib.SMTP(options.mail_host, port=options.mail_port)
-            smtpObj.set_debuglevel(False)
-            try:
-                smtpObj.starttls()
-                try:
-                    smtpObj.login(options.mail_username, options.mail_password)
-                except smtplib.SMTPNotSupportedError as e:
-                    logging.warning(
-                        "SMTP Auth issue (%s). Attempting to send anyway." % e
-                    )
-                smtpObj.sendmail(options.mail_sender, receivers, message)
-            finally:
-                smtpObj.quit()
+            message = self.create_reset_message(user, reset_token)
+            send_email_message(receivers, message)            
             logging.info("Password Reset sent for %s" % user.email)
         elif not len(options.mail_host) > 0:
             logging.info("Password Reset request failed: No Mail Host in Settings.")
@@ -887,16 +844,7 @@ class ForgotPasswordHandler(BaseHandler):
             self.request.headers.get("X-Real-IP")
             or self.request.headers.get("X-Forwarded-For")
             or self.request.remote_ip
-        )
-        header = []
-        header.append("Subject: %s Password Reset" % options.game_name)
-        header.append("From: %s <%s>" % (options.game_name, options.mail_sender))
-        header.append("To: %s <%s>" % (user.name, user.email))
-        header.append("MIME-Version: 1.0")
-        header.append('Content-Type: text/html; charset="UTF-8"')
-        header.append("Content-Transfer-Encoding: BASE64")
-        header.append("\r\n")
-        header.append("")
+        )        
         f = open("templates/public/reset_email.html", "r")
         template = (
             f.read()
@@ -908,11 +856,7 @@ class ForgotPasswordHandler(BaseHandler):
             .replace("https://example.com", origin)
         )
         f.close()
-        try:
-            email_msg = "\n".join(header) + b64encode(template)
-        except:
-            email_msg = "\n".join(header) + decode(b64encode(encode(template)))
-        return email_msg
+        return get_email_message(create_email_headers(user, "Password Reset"), template)        
 
 
 class ResetPasswordHandler(BaseHandler):
